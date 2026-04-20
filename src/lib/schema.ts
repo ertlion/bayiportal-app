@@ -113,12 +113,14 @@ export const syncLogs = pgTable("sync_logs", {
 ]);
 
 // ==================== RELATIONS ====================
-export const shopsRelations = relations(shops, ({ many }) => ({
+export const shopsRelations = relations(shops, ({ many, one }) => ({
   credentials: many(marketplaceCredentials),
   matchings: many(productMatchings),
   shopifyProducts: many(shopifyProducts),
   marketplaceProducts: many(marketplaceProducts),
   syncLogs: many(syncLogs),
+  invoiceSetting: one(invoiceSettings),
+  invoices: many(invoices),
 }));
 
 export const credentialsRelations = relations(marketplaceCredentials, ({ one }) => ({
@@ -139,4 +141,48 @@ export const marketplaceProductsRelations = relations(marketplaceProducts, ({ on
 
 export const syncLogsRelations = relations(syncLogs, ({ one }) => ({
   shop: one(shops, { fields: [syncLogs.shopId], references: [shops.id] }),
+}));
+
+// ==================== INVOICE SETTINGS ====================
+export const invoiceSettings = pgTable("invoice_settings", {
+  id: serial("id").primaryKey(),
+  shopId: integer("shop_id").notNull().references(() => shops.id, { onDelete: "cascade" }).unique(),
+  provider: text("provider").notNull(), // uyumsoft, parasut, logo, elogo, kolaybi
+  credentials: text("credentials").notNull(), // encrypted JSON
+  isActive: boolean("is_active").notNull().default(true),
+  autoInvoice: boolean("auto_invoice").notNull().default(false),
+  lastTestedAt: timestamp("last_tested_at"),
+  testResult: text("test_result"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// ==================== INVOICES ====================
+export const invoices = pgTable("invoices", {
+  id: serial("id").primaryKey(),
+  shopId: integer("shop_id").notNull().references(() => shops.id, { onDelete: "cascade" }),
+  provider: text("provider").notNull(),
+  externalInvoiceId: text("external_invoice_id"),
+  orderNumber: text("order_number").notNull(),
+  orderSource: text("order_source"), // shopify, trendyol, hepsiburada, n11
+  customerName: text("customer_name"),
+  customerTaxId: text("customer_tax_id"),
+  customerTaxOffice: text("customer_tax_office"),
+  totalAmount: text("total_amount").notNull(),
+  currency: text("currency").notNull().default("TRY"),
+  status: text("status").notNull().default("pending"), // pending, sent, error, cancelled
+  errorMessage: text("error_message"),
+  pdfUrl: text("pdf_url"),
+  items: jsonb("items").notNull().default("[]"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (t) => [
+  index("inv_shop_order_idx").on(t.shopId, t.orderNumber),
+]);
+
+// ==================== INVOICE RELATIONS ====================
+export const invoiceSettingsRelations = relations(invoiceSettings, ({ one }) => ({
+  shop: one(shops, { fields: [invoiceSettings.shopId], references: [shops.id] }),
+}));
+
+export const invoicesRelations = relations(invoices, ({ one }) => ({
+  shop: one(shops, { fields: [invoices.shopId], references: [shops.id] }),
 }));

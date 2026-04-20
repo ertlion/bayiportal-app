@@ -3,6 +3,90 @@
 import { useState, useEffect, useCallback } from "react";
 
 type Marketplace = "trendyol" | "hepsiburada" | "n11" | "pazarama";
+type InvoiceProvider = "uyumsoft" | "parasut" | "logo" | "elogo" | "kolaybi";
+
+interface InvoiceItem {
+  name: string;
+  quantity: number;
+  unitPrice: number;
+  vatRate: number;
+  totalPrice: number;
+}
+
+interface Invoice {
+  id: number;
+  provider: string;
+  externalInvoiceId: string | null;
+  orderNumber: string;
+  orderSource: string | null;
+  customerName: string | null;
+  totalAmount: string;
+  currency: string;
+  status: string;
+  errorMessage: string | null;
+  pdfUrl: string | null;
+  createdAt: string;
+}
+
+interface InvoiceSettingsData {
+  configured: boolean;
+  provider?: InvoiceProvider;
+  isActive?: boolean;
+  autoInvoice?: boolean;
+  lastTestedAt?: string;
+  testResult?: string;
+}
+
+const INVOICE_PROVIDERS: { id: InvoiceProvider; name: string; fields: { key: string; label: string; type?: string }[] }[] = [
+  {
+    id: "uyumsoft",
+    name: "Uyumsoft",
+    fields: [
+      { key: "uyumsoft_username", label: "Kullanici Adi" },
+      { key: "uyumsoft_password", label: "Sifre", type: "password" },
+      { key: "uyumsoft_is_test", label: "Test Modu (true/false)" },
+      { key: "uyumsoft_vkn", label: "VKN / TCKN" },
+      { key: "uyumsoft_company_name", label: "Firma Adi" },
+      { key: "uyumsoft_address", label: "Adres" },
+      { key: "uyumsoft_city", label: "Sehir" },
+    ],
+  },
+  {
+    id: "parasut",
+    name: "Parasut",
+    fields: [
+      { key: "parasut_client_id", label: "Client ID" },
+      { key: "parasut_client_secret", label: "Client Secret", type: "password" },
+      { key: "parasut_company_id", label: "Sirket ID" },
+      { key: "parasut_username", label: "Kullanici Adi" },
+      { key: "parasut_password", label: "Sifre", type: "password" },
+    ],
+  },
+  {
+    id: "logo",
+    name: "Logo",
+    fields: [
+      { key: "logo_username", label: "Kullanici Adi" },
+      { key: "logo_password", label: "Sifre", type: "password" },
+      { key: "logo_firm_id", label: "Firma ID" },
+    ],
+  },
+  {
+    id: "elogo",
+    name: "e-Logo",
+    fields: [
+      { key: "elogo_api_key", label: "API Key" },
+      { key: "elogo_secret_key", label: "Secret Key", type: "password" },
+    ],
+  },
+  {
+    id: "kolaybi",
+    name: "KolayBi",
+    fields: [
+      { key: "kolaybi_api_key", label: "API Key", type: "password" },
+    ],
+  },
+];
 
 interface ShopifyVariant {
   id: string;
@@ -93,7 +177,7 @@ const MARKETPLACES: { id: Marketplace; name: string; fields: { key: string; labe
 ];
 
 export default function Dashboard() {
-  const [tab, setTab] = useState<"setup" | "matching" | "logs">("setup");
+  const [tab, setTab] = useState<"setup" | "matching" | "logs" | "invoice">("setup");
   const [settings, setSettings] = useState<Settings | null>(null);
   const [selectedMp, setSelectedMp] = useState<Marketplace | null>(null);
   const [creds, setCreds] = useState<Record<string, string>>({});
@@ -110,6 +194,34 @@ export default function Dashboard() {
   // Manual match state
   const [selectedShopify, setSelectedShopify] = useState<{ product: ShopifyProduct; variant: ShopifyVariant } | null>(null);
   const [selectedMarketplace, setSelectedMarketplace] = useState<{ product: MarketplaceProduct; variant: MarketplaceVariant } | null>(null);
+
+  // Invoice state
+  const [invoiceSettings, setInvoiceSettings] = useState<InvoiceSettingsData | null>(null);
+  const [selectedProvider, setSelectedProvider] = useState<InvoiceProvider | null>(null);
+  const [invoiceCreds, setInvoiceCreds] = useState<Record<string, string>>({});
+  const [invoiceSaving, setInvoiceSaving] = useState(false);
+  const [invoiceSaveResult, setInvoiceSaveResult] = useState<{ success: boolean; error?: string } | null>(null);
+  const [invoiceList, setInvoiceList] = useState<Invoice[]>([]);
+  const [autoInvoice, setAutoInvoice] = useState(false);
+
+  // Invoice form state
+  const [showInvoiceForm, setShowInvoiceForm] = useState(false);
+  const [invoiceForm, setInvoiceForm] = useState({
+    orderNumber: "",
+    orderSource: "",
+    customerName: "",
+    customerTaxId: "",
+    customerTaxOffice: "",
+    customerAddress: "",
+    customerCity: "",
+    totalAmount: "",
+    itemName: "",
+    itemQuantity: "1",
+    itemUnitPrice: "",
+    itemVatRate: "20",
+  });
+  const [invoiceItems, setInvoiceItems] = useState<InvoiceItem[]>([]);
+  const [creatingInvoice, setCreatingInvoice] = useState(false);
 
   useEffect(() => {
     fetch("/api/settings").then((r) => r.json()).then(setSettings).catch(console.error);
@@ -150,12 +262,30 @@ export default function Dashboard() {
     }
   }, [settings?.shop.marketplace]);
 
+  const loadInvoiceData = useCallback(async () => {
+    try {
+      const [settingsRes, listRes] = await Promise.all([
+        fetch("/api/invoices/settings").then((r) => r.json()),
+        fetch("/api/invoices").then((r) => r.json()),
+      ]);
+      setInvoiceSettings(settingsRes);
+      setInvoiceList(listRes.invoices || []);
+      if (settingsRes.configured && settingsRes.provider) {
+        setSelectedProvider(settingsRes.provider);
+        setAutoInvoice(settingsRes.autoInvoice || false);
+      }
+    } catch { /* ignore */ }
+  }, []);
+
   useEffect(() => {
     if (tab === "matching") {
       loadMatchings();
       loadProducts();
     }
-  }, [tab, loadMatchings, loadProducts]);
+    if (tab === "invoice") {
+      loadInvoiceData();
+    }
+  }, [tab, loadMatchings, loadProducts, loadInvoiceData]);
 
   const saveCredentials = async () => {
     if (!selectedMp) return;
@@ -225,6 +355,80 @@ export default function Dashboard() {
     await loadMatchings();
   };
 
+  const saveInvoiceSettings = async () => {
+    if (!selectedProvider) return;
+    setInvoiceSaving(true);
+    setInvoiceSaveResult(null);
+    try {
+      const r = await fetch("/api/invoices/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ provider: selectedProvider, credentials: invoiceCreds, autoInvoice }),
+      });
+      const data = await r.json();
+      setInvoiceSaveResult(data);
+      if (data.success) {
+        await loadInvoiceData();
+      }
+    } finally {
+      setInvoiceSaving(false);
+    }
+  };
+
+  const addInvoiceItem = () => {
+    const qty = parseFloat(invoiceForm.itemQuantity) || 1;
+    const price = parseFloat(invoiceForm.itemUnitPrice) || 0;
+    const vat = parseFloat(invoiceForm.itemVatRate) || 0;
+    if (!invoiceForm.itemName || price <= 0) return;
+    const totalPrice = Math.round(qty * price * (1 + vat / 100) * 100) / 100;
+    setInvoiceItems([...invoiceItems, {
+      name: invoiceForm.itemName,
+      quantity: qty,
+      unitPrice: price,
+      vatRate: vat,
+      totalPrice,
+    }]);
+    setInvoiceForm({ ...invoiceForm, itemName: "", itemQuantity: "1", itemUnitPrice: "", itemVatRate: "20" });
+  };
+
+  const removeInvoiceItem = (idx: number) => {
+    setInvoiceItems(invoiceItems.filter((_, i) => i !== idx));
+  };
+
+  const createInvoice = async () => {
+    if (!invoiceForm.orderNumber || !invoiceForm.customerName || invoiceItems.length === 0) return;
+    setCreatingInvoice(true);
+    try {
+      const totalAmount = parseFloat(invoiceForm.totalAmount) || invoiceItems.reduce((sum, i) => sum + i.totalPrice, 0);
+      const r = await fetch("/api/invoices", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          orderNumber: invoiceForm.orderNumber,
+          orderSource: invoiceForm.orderSource || undefined,
+          customerName: invoiceForm.customerName,
+          customerTaxId: invoiceForm.customerTaxId || undefined,
+          customerTaxOffice: invoiceForm.customerTaxOffice || undefined,
+          customerAddress: invoiceForm.customerAddress || undefined,
+          customerCity: invoiceForm.customerCity || undefined,
+          items: invoiceItems,
+          totalAmount,
+        }),
+      });
+      const data = await r.json();
+      if (data.success) {
+        setShowInvoiceForm(false);
+        setInvoiceForm({ orderNumber: "", orderSource: "", customerName: "", customerTaxId: "", customerTaxOffice: "", customerAddress: "", customerCity: "", totalAmount: "", itemName: "", itemQuantity: "1", itemUnitPrice: "", itemVatRate: "20" });
+        setInvoiceItems([]);
+        await loadInvoiceData();
+      } else {
+        alert(data.error || "Fatura olusturulamadi");
+      }
+    } finally {
+      setCreatingInvoice(false);
+    }
+  };
+
   if (!settings) return <div className="flex items-center justify-center h-screen"><div className="text-gray-500">Yükleniyor...</div></div>;
 
   const activeMp = settings.marketplaces.find((m) => m.isActive);
@@ -253,6 +457,7 @@ export default function Dashboard() {
             { id: "setup" as const, label: "Kurulum" },
             { id: "matching" as const, label: "Ürün Eşleştirme" },
             { id: "logs" as const, label: "Sync Logları" },
+            { id: "invoice" as const, label: "E-Fatura" },
           ].map((t) => (
             <button
               key={t.id}
@@ -476,6 +681,300 @@ export default function Dashboard() {
             <h2 className="text-lg font-semibold mb-4">Sync Logları</h2>
             <p className="text-sm text-gray-500">Son sync işlemleri burada görünecek.</p>
             {/* TODO: Fetch and display sync logs */}
+          </div>
+        )}
+
+        {/* INVOICE TAB */}
+        {tab === "invoice" && (
+          <div className="space-y-6">
+            {/* Provider Selection & Settings */}
+            <div className="bg-white rounded-xl border p-6">
+              <h2 className="text-lg font-semibold mb-4">E-Fatura Entegrasyonu</h2>
+              <p className="text-sm text-gray-500 mb-6">
+                Fatura saglayicinizi secin ve bilgilerinizi girin.
+              </p>
+
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
+                {INVOICE_PROVIDERS.map((p) => (
+                  <button
+                    key={p.id}
+                    onClick={() => { setSelectedProvider(p.id); setInvoiceCreds({}); setInvoiceSaveResult(null); }}
+                    className={`p-4 rounded-lg border-2 text-center transition ${
+                      selectedProvider === p.id
+                        ? "border-blue-500 bg-blue-50"
+                        : invoiceSettings?.configured && invoiceSettings.provider === p.id
+                        ? "border-green-300 bg-green-50"
+                        : "border-gray-200 hover:border-gray-300"
+                    }`}
+                  >
+                    <div className="font-semibold text-sm">{p.name}</div>
+                    {invoiceSettings?.configured && invoiceSettings.provider === p.id && (
+                      <div className="text-xs text-green-600 mt-1">Aktif</div>
+                    )}
+                  </button>
+                ))}
+              </div>
+
+              {selectedProvider && (
+                <div className="border-t pt-6">
+                  <h3 className="font-medium mb-4">{INVOICE_PROVIDERS.find((p) => p.id === selectedProvider)?.name} Ayarlari</h3>
+                  <div className="space-y-4 max-w-md">
+                    {INVOICE_PROVIDERS.find((p) => p.id === selectedProvider)?.fields.map((field) => (
+                      <div key={field.key}>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">{field.label}</label>
+                        <input
+                          type={field.type || "text"}
+                          value={invoiceCreds[field.key] || ""}
+                          onChange={(e) => setInvoiceCreds({ ...invoiceCreds, [field.key]: e.target.value })}
+                          className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        />
+                      </div>
+                    ))}
+                    <div className="flex items-center gap-3">
+                      <label className="flex items-center gap-2 text-sm">
+                        <input
+                          type="checkbox"
+                          checked={autoInvoice}
+                          onChange={(e) => setAutoInvoice(e.target.checked)}
+                          className="rounded border-gray-300"
+                        />
+                        Siparislerde otomatik fatura olustur
+                      </label>
+                    </div>
+                    <button
+                      onClick={saveInvoiceSettings}
+                      disabled={invoiceSaving}
+                      className="px-6 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
+                    >
+                      {invoiceSaving ? "Test ediliyor..." : "Kaydet ve Test Et"}
+                    </button>
+                    {invoiceSaveResult && (
+                      <div className={`p-3 rounded-lg text-sm ${invoiceSaveResult.success ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"}`}>
+                        {invoiceSaveResult.success ? "Baglanti basarili!" : `Hata: ${invoiceSaveResult.error}`}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Create Invoice */}
+            {invoiceSettings?.configured && invoiceSettings.isActive && (
+              <div className="bg-white rounded-xl border p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-lg font-semibold">Manuel Fatura Olustur</h2>
+                  <button
+                    onClick={() => setShowInvoiceForm(!showInvoiceForm)}
+                    className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700"
+                  >
+                    {showInvoiceForm ? "Kapat" : "Yeni Fatura"}
+                  </button>
+                </div>
+
+                {showInvoiceForm && (
+                  <div className="border-t pt-4 space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Siparis No *</label>
+                        <input
+                          type="text"
+                          value={invoiceForm.orderNumber}
+                          onChange={(e) => setInvoiceForm({ ...invoiceForm, orderNumber: e.target.value })}
+                          className="w-full px-3 py-2 border rounded-lg text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Siparis Kaynagi</label>
+                        <select
+                          value={invoiceForm.orderSource}
+                          onChange={(e) => setInvoiceForm({ ...invoiceForm, orderSource: e.target.value })}
+                          className="w-full px-3 py-2 border rounded-lg text-sm"
+                        >
+                          <option value="">Seciniz</option>
+                          <option value="shopify">Shopify</option>
+                          <option value="trendyol">Trendyol</option>
+                          <option value="hepsiburada">Hepsiburada</option>
+                          <option value="n11">N11</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Musteri Adi *</label>
+                        <input
+                          type="text"
+                          value={invoiceForm.customerName}
+                          onChange={(e) => setInvoiceForm({ ...invoiceForm, customerName: e.target.value })}
+                          className="w-full px-3 py-2 border rounded-lg text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">VKN / TCKN</label>
+                        <input
+                          type="text"
+                          value={invoiceForm.customerTaxId}
+                          onChange={(e) => setInvoiceForm({ ...invoiceForm, customerTaxId: e.target.value })}
+                          className="w-full px-3 py-2 border rounded-lg text-sm"
+                        />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-3 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Vergi Dairesi</label>
+                        <input
+                          type="text"
+                          value={invoiceForm.customerTaxOffice}
+                          onChange={(e) => setInvoiceForm({ ...invoiceForm, customerTaxOffice: e.target.value })}
+                          className="w-full px-3 py-2 border rounded-lg text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Adres</label>
+                        <input
+                          type="text"
+                          value={invoiceForm.customerAddress}
+                          onChange={(e) => setInvoiceForm({ ...invoiceForm, customerAddress: e.target.value })}
+                          className="w-full px-3 py-2 border rounded-lg text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Sehir</label>
+                        <input
+                          type="text"
+                          value={invoiceForm.customerCity}
+                          onChange={(e) => setInvoiceForm({ ...invoiceForm, customerCity: e.target.value })}
+                          className="w-full px-3 py-2 border rounded-lg text-sm"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Invoice Items */}
+                    <div className="border-t pt-4">
+                      <h3 className="text-sm font-medium text-gray-700 mb-3">Fatura Kalemleri</h3>
+                      {invoiceItems.length > 0 && (
+                        <div className="space-y-2 mb-4">
+                          {invoiceItems.map((item, idx) => (
+                            <div key={idx} className="flex items-center justify-between p-2 bg-gray-50 rounded text-sm">
+                              <span className="flex-1">{item.name}</span>
+                              <span className="w-16 text-center">{item.quantity} ad.</span>
+                              <span className="w-24 text-right">{item.unitPrice.toFixed(2)} TL</span>
+                              <span className="w-16 text-center">%{item.vatRate}</span>
+                              <span className="w-24 text-right font-medium">{item.totalPrice.toFixed(2)} TL</span>
+                              <button onClick={() => removeInvoiceItem(idx)} className="ml-2 text-red-500 hover:text-red-700 text-xs">Sil</button>
+                            </div>
+                          ))}
+                          <div className="text-right text-sm font-semibold">
+                            Toplam: {invoiceItems.reduce((s, i) => s + i.totalPrice, 0).toFixed(2)} TL
+                          </div>
+                        </div>
+                      )}
+                      <div className="flex gap-2 items-end">
+                        <div className="flex-1">
+                          <label className="block text-xs text-gray-500 mb-1">Urun Adi</label>
+                          <input
+                            type="text"
+                            value={invoiceForm.itemName}
+                            onChange={(e) => setInvoiceForm({ ...invoiceForm, itemName: e.target.value })}
+                            className="w-full px-2 py-1.5 border rounded text-sm"
+                          />
+                        </div>
+                        <div className="w-20">
+                          <label className="block text-xs text-gray-500 mb-1">Adet</label>
+                          <input
+                            type="number"
+                            value={invoiceForm.itemQuantity}
+                            onChange={(e) => setInvoiceForm({ ...invoiceForm, itemQuantity: e.target.value })}
+                            className="w-full px-2 py-1.5 border rounded text-sm"
+                          />
+                        </div>
+                        <div className="w-28">
+                          <label className="block text-xs text-gray-500 mb-1">Birim Fiyat</label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            value={invoiceForm.itemUnitPrice}
+                            onChange={(e) => setInvoiceForm({ ...invoiceForm, itemUnitPrice: e.target.value })}
+                            className="w-full px-2 py-1.5 border rounded text-sm"
+                          />
+                        </div>
+                        <div className="w-20">
+                          <label className="block text-xs text-gray-500 mb-1">KDV %</label>
+                          <input
+                            type="number"
+                            value={invoiceForm.itemVatRate}
+                            onChange={(e) => setInvoiceForm({ ...invoiceForm, itemVatRate: e.target.value })}
+                            className="w-full px-2 py-1.5 border rounded text-sm"
+                          />
+                        </div>
+                        <button
+                          onClick={addInvoiceItem}
+                          className="px-3 py-1.5 bg-gray-200 text-gray-700 rounded text-sm hover:bg-gray-300"
+                        >
+                          Ekle
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="border-t pt-4 flex justify-end">
+                      <button
+                        onClick={createInvoice}
+                        disabled={creatingInvoice || invoiceItems.length === 0 || !invoiceForm.orderNumber || !invoiceForm.customerName}
+                        className="px-6 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
+                      >
+                        {creatingInvoice ? "Gonderiliyor..." : "Fatura Olustur"}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Invoice List */}
+            <div className="bg-white rounded-xl border p-6">
+              <h2 className="text-lg font-semibold mb-4">Kesilen Faturalar</h2>
+              {invoiceList.length === 0 ? (
+                <p className="text-gray-500 text-sm">Henuz fatura kesilmemis.</p>
+              ) : (
+                <div className="space-y-2">
+                  {invoiceList.map((inv) => (
+                    <div key={inv.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                      <div className="flex-1">
+                        <div className="text-sm font-medium">#{inv.orderNumber}</div>
+                        <div className="text-xs text-gray-500">
+                          {inv.customerName} {inv.orderSource ? `(${inv.orderSource})` : ""}
+                        </div>
+                      </div>
+                      <div className="text-right mr-4">
+                        <div className="text-sm font-medium">{inv.totalAmount} {inv.currency}</div>
+                        <div className="text-xs text-gray-500">{new Date(inv.createdAt).toLocaleDateString("tr-TR")}</div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                          inv.status === "sent" ? "bg-green-100 text-green-700" :
+                          inv.status === "error" ? "bg-red-100 text-red-700" :
+                          inv.status === "cancelled" ? "bg-gray-100 text-gray-700" :
+                          "bg-yellow-100 text-yellow-700"
+                        }`}>
+                          {inv.status === "sent" ? "Gonderildi" :
+                           inv.status === "error" ? "Hata" :
+                           inv.status === "cancelled" ? "Iptal" : "Bekliyor"}
+                        </span>
+                        {inv.pdfUrl && (
+                          <a href={inv.pdfUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 text-xs">
+                            PDF
+                          </a>
+                        )}
+                      </div>
+                      {inv.errorMessage && (
+                        <div className="text-xs text-red-500 ml-2" title={inv.errorMessage}>
+                          {inv.errorMessage.substring(0, 30)}...
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         )}
       </div>
