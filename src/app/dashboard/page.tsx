@@ -1,6 +1,34 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import {
+  Page,
+  Layout,
+  Card,
+  Tabs,
+  FormLayout,
+  TextField,
+  Select,
+  Button,
+  Banner,
+  DataTable,
+  Badge,
+  Modal,
+  EmptyState,
+  Spinner,
+  Checkbox,
+  Text,
+  BlockStack,
+  InlineStack,
+  InlineGrid,
+  Box,
+  Divider,
+} from "@shopify/polaris";
+import { useAuthenticatedFetch } from "../providers";
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
 
 type Marketplace = "trendyol" | "hepsiburada" | "n11" | "pazarama";
 type InvoiceProvider = "uyumsoft" | "parasut" | "logo" | "elogo" | "kolaybi";
@@ -36,57 +64,6 @@ interface InvoiceSettingsData {
   lastTestedAt?: string;
   testResult?: string;
 }
-
-const INVOICE_PROVIDERS: { id: InvoiceProvider; name: string; fields: { key: string; label: string; type?: string }[] }[] = [
-  {
-    id: "uyumsoft",
-    name: "Uyumsoft",
-    fields: [
-      { key: "uyumsoft_username", label: "Kullanici Adi" },
-      { key: "uyumsoft_password", label: "Sifre", type: "password" },
-      { key: "uyumsoft_is_test", label: "Test Modu (true/false)" },
-      { key: "uyumsoft_vkn", label: "VKN / TCKN" },
-      { key: "uyumsoft_company_name", label: "Firma Adi" },
-      { key: "uyumsoft_address", label: "Adres" },
-      { key: "uyumsoft_city", label: "Sehir" },
-    ],
-  },
-  {
-    id: "parasut",
-    name: "Parasut",
-    fields: [
-      { key: "parasut_client_id", label: "Client ID" },
-      { key: "parasut_client_secret", label: "Client Secret", type: "password" },
-      { key: "parasut_company_id", label: "Sirket ID" },
-      { key: "parasut_username", label: "Kullanici Adi" },
-      { key: "parasut_password", label: "Sifre", type: "password" },
-    ],
-  },
-  {
-    id: "logo",
-    name: "Logo",
-    fields: [
-      { key: "logo_username", label: "Kullanici Adi" },
-      { key: "logo_password", label: "Sifre", type: "password" },
-      { key: "logo_firm_id", label: "Firma ID" },
-    ],
-  },
-  {
-    id: "elogo",
-    name: "e-Logo",
-    fields: [
-      { key: "elogo_api_key", label: "API Key" },
-      { key: "elogo_secret_key", label: "Secret Key", type: "password" },
-    ],
-  },
-  {
-    id: "kolaybi",
-    name: "KolayBi",
-    fields: [
-      { key: "kolaybi_api_key", label: "API Key", type: "password" },
-    ],
-  },
-];
 
 interface ShopifyVariant {
   id: string;
@@ -136,26 +113,43 @@ interface Matching {
 }
 
 interface Settings {
-  shop: { domain: string; plan: string; productLimit: number; marketplace: string | null };
-  marketplaces: Array<{ marketplace: string; isActive: boolean; testResult: string | null }>;
+  shop: {
+    domain: string;
+    plan: string;
+    productLimit: number;
+    marketplace: string | null;
+  };
+  marketplaces: Array<{
+    marketplace: string;
+    isActive: boolean;
+    testResult: string | null;
+  }>;
 }
 
-const MARKETPLACES: { id: Marketplace; name: string; fields: { key: string; label: string; type?: string }[] }[] = [
+// ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
+
+const MARKETPLACES: {
+  id: Marketplace;
+  name: string;
+  fields: { key: string; label: string; type?: string }[];
+}[] = [
   {
     id: "trendyol",
     name: "Trendyol",
     fields: [
       { key: "trendyol_api_key", label: "API Key" },
       { key: "trendyol_api_secret", label: "API Secret", type: "password" },
-      { key: "trendyol_seller_id", label: "Satıcı ID" },
+      { key: "trendyol_seller_id", label: "Satici ID" },
     ],
   },
   {
     id: "hepsiburada",
     name: "Hepsiburada",
     fields: [
-      { key: "hb_merchant_id", label: "Mağaza ID (Merchant ID)" },
-      { key: "hb_password", label: "Servis Şifresi", type: "password" },
+      { key: "hb_merchant_id", label: "Magaza ID (Merchant ID)" },
+      { key: "hb_password", label: "Servis Sifresi", type: "password" },
     ],
   },
   {
@@ -176,31 +170,135 @@ const MARKETPLACES: { id: Marketplace; name: string; fields: { key: string; labe
   },
 ];
 
+const INVOICE_PROVIDERS: {
+  id: InvoiceProvider;
+  name: string;
+  fields: { key: string; label: string; type?: string }[];
+}[] = [
+  {
+    id: "uyumsoft",
+    name: "Uyumsoft",
+    fields: [
+      { key: "uyumsoft_username", label: "Kullanici Adi" },
+      { key: "uyumsoft_password", label: "Sifre", type: "password" },
+      { key: "uyumsoft_is_test", label: "Test Modu (true/false)" },
+      { key: "uyumsoft_vkn", label: "VKN / TCKN" },
+      { key: "uyumsoft_company_name", label: "Firma Adi" },
+      { key: "uyumsoft_address", label: "Adres" },
+      { key: "uyumsoft_city", label: "Sehir" },
+    ],
+  },
+  {
+    id: "parasut",
+    name: "Parasut",
+    fields: [
+      { key: "parasut_client_id", label: "Client ID" },
+      { key: "parasut_client_secret", label: "Client Secret", type: "password" },
+      { key: "parasut_company_id", label: "Sirket ID" },
+      { key: "parasut_username", label: "Kullanici Adi" },
+      { key: "parasut_password", label: "Sifre", type: "password" },
+    ],
+  },
+  {
+    id: "logo",
+    name: "Logo",
+    fields: [
+      { key: "logo_username", label: "Kullanici Adi" },
+      { key: "logo_password", label: "Sifre", type: "password" },
+      { key: "logo_firm_id", label: "Firma ID" },
+    ],
+  },
+  {
+    id: "elogo",
+    name: "e-Logo",
+    fields: [
+      { key: "elogo_api_key", label: "API Key" },
+      { key: "elogo_secret_key", label: "Secret Key", type: "password" },
+    ],
+  },
+  {
+    id: "kolaybi",
+    name: "KolayBi",
+    fields: [{ key: "kolaybi_api_key", label: "API Key", type: "password" }],
+  },
+];
+
+const TAB_IDS = ["setup", "matching", "logs", "invoice"] as const;
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function invoiceStatusBadge(status: string) {
+  switch (status) {
+    case "sent":
+      return <Badge tone="success">Gonderildi</Badge>;
+    case "error":
+      return <Badge tone="critical">Hata</Badge>;
+    case "cancelled":
+      return <Badge>Iptal</Badge>;
+    default:
+      return <Badge tone="warning">Bekliyor</Badge>;
+  }
+}
+
+function syncStatusBadge(status: string | null) {
+  if (status === "success") return <Badge tone="success">Basarili</Badge>;
+  if (status === "error") return <Badge tone="critical">Hata</Badge>;
+  return <Badge>Bekleniyor</Badge>;
+}
+
+// ---------------------------------------------------------------------------
+// Component
+// ---------------------------------------------------------------------------
+
 export default function Dashboard() {
-  const [tab, setTab] = useState<"setup" | "matching" | "logs" | "invoice">("setup");
+  const authFetch = useAuthenticatedFetch();
+
+  // Tab state
+  const [selectedTab, setSelectedTab] = useState(0);
+
+  // Settings state
   const [settings, setSettings] = useState<Settings | null>(null);
   const [selectedMp, setSelectedMp] = useState<Marketplace | null>(null);
   const [creds, setCreds] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
-  const [saveResult, setSaveResult] = useState<{ success: boolean; error?: string } | null>(null);
+  const [saveResult, setSaveResult] = useState<{
+    success: boolean;
+    error?: string;
+  } | null>(null);
 
   // Matching state
   const [matchings, setMatchings] = useState<Matching[]>([]);
   const [shopifyProducts, setShopifyProducts] = useState<ShopifyProduct[]>([]);
   const [mpProducts, setMpProducts] = useState<MarketplaceProduct[]>([]);
   const [loading, setLoading] = useState(false);
-  const [autoMatchResult, setAutoMatchResult] = useState<{ matched: number; unmatched: number } | null>(null);
+  const [autoMatchResult, setAutoMatchResult] = useState<{
+    matched: number;
+    unmatched: number;
+  } | null>(null);
 
   // Manual match state
-  const [selectedShopify, setSelectedShopify] = useState<{ product: ShopifyProduct; variant: ShopifyVariant } | null>(null);
-  const [selectedMarketplace, setSelectedMarketplace] = useState<{ product: MarketplaceProduct; variant: MarketplaceVariant } | null>(null);
+  const [selectedShopify, setSelectedShopify] = useState<{
+    product: ShopifyProduct;
+    variant: ShopifyVariant;
+  } | null>(null);
+  const [selectedMarketplace, setSelectedMarketplace] = useState<{
+    product: MarketplaceProduct;
+    variant: MarketplaceVariant;
+  } | null>(null);
 
   // Invoice state
-  const [invoiceSettings, setInvoiceSettings] = useState<InvoiceSettingsData | null>(null);
-  const [selectedProvider, setSelectedProvider] = useState<InvoiceProvider | null>(null);
+  const [invoiceSettings, setInvoiceSettings] =
+    useState<InvoiceSettingsData | null>(null);
+  const [selectedProvider, setSelectedProvider] =
+    useState<InvoiceProvider | null>(null);
   const [invoiceCreds, setInvoiceCreds] = useState<Record<string, string>>({});
   const [invoiceSaving, setInvoiceSaving] = useState(false);
-  const [invoiceSaveResult, setInvoiceSaveResult] = useState<{ success: boolean; error?: string } | null>(null);
+  const [invoiceSaveResult, setInvoiceSaveResult] = useState<{
+    success: boolean;
+    error?: string;
+  } | null>(null);
   const [invoiceList, setInvoiceList] = useState<Invoice[]>([]);
   const [autoInvoice, setAutoInvoice] = useState(false);
 
@@ -223,50 +321,65 @@ export default function Dashboard() {
   const [invoiceItems, setInvoiceItems] = useState<InvoiceItem[]>([]);
   const [creatingInvoice, setCreatingInvoice] = useState(false);
 
+  // -----------------------------------------------------------------------
+  // Data loading
+  // -----------------------------------------------------------------------
+
   useEffect(() => {
-    fetch("/api/settings").then((r) => r.json()).then(setSettings).catch(console.error);
-  }, []);
+    authFetch("/api/settings")
+      .then((r) => r.json())
+      .then(setSettings)
+      .catch(() => {});
+  }, [authFetch]);
 
   const loadMatchings = useCallback(async () => {
     if (!settings?.shop.marketplace) return;
-    const r = await fetch(`/api/matching?marketplace=${settings.shop.marketplace}`);
+    const r = await authFetch(
+      `/api/matching?marketplace=${settings.shop.marketplace}`,
+    );
     const data = await r.json();
     setMatchings(data.matchings || []);
-  }, [settings?.shop.marketplace]);
+  }, [authFetch, settings?.shop.marketplace]);
 
   const loadProducts = useCallback(async () => {
     if (!settings?.shop.marketplace) return;
     setLoading(true);
     try {
-      // Fetch Shopify products
-      await fetch("/api/products", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ source: "shopify" }) });
-      const spRes = await fetch("/api/products?source=shopify");
+      await authFetch("/api/products", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ source: "shopify" }),
+      });
+      const spRes = await authFetch("/api/products?source=shopify");
       const spData = await spRes.json();
       setShopifyProducts(spData.products || []);
 
-      // Fetch marketplace products
       const mp = settings.shop.marketplace;
       let page = 0;
       let hasMore = true;
       while (hasMore) {
-        const r = await fetch("/api/products", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ source: mp, page }) });
+        const r = await authFetch("/api/products", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ source: mp, page }),
+        });
         const d = await r.json();
         hasMore = d.hasMore;
         page++;
       }
-      const mpRes = await fetch(`/api/products?source=${mp}`);
+      const mpRes = await authFetch(`/api/products?source=${mp}`);
       const mpData = await mpRes.json();
       setMpProducts(mpData.products || []);
     } finally {
       setLoading(false);
     }
-  }, [settings?.shop.marketplace]);
+  }, [authFetch, settings?.shop.marketplace]);
 
   const loadInvoiceData = useCallback(async () => {
     try {
       const [settingsRes, listRes] = await Promise.all([
-        fetch("/api/invoices/settings").then((r) => r.json()),
-        fetch("/api/invoices").then((r) => r.json()),
+        authFetch("/api/invoices/settings").then((r) => r.json()),
+        authFetch("/api/invoices").then((r) => r.json()),
       ]);
       setInvoiceSettings(settingsRes);
       setInvoiceList(listRes.invoices || []);
@@ -274,25 +387,32 @@ export default function Dashboard() {
         setSelectedProvider(settingsRes.provider);
         setAutoInvoice(settingsRes.autoInvoice || false);
       }
-    } catch { /* ignore */ }
-  }, []);
+    } catch {
+      /* ignore */
+    }
+  }, [authFetch]);
 
   useEffect(() => {
-    if (tab === "matching") {
+    const currentTab = TAB_IDS[selectedTab];
+    if (currentTab === "matching") {
       loadMatchings();
       loadProducts();
     }
-    if (tab === "invoice") {
+    if (currentTab === "invoice") {
       loadInvoiceData();
     }
-  }, [tab, loadMatchings, loadProducts, loadInvoiceData]);
+  }, [selectedTab, loadMatchings, loadProducts, loadInvoiceData]);
+
+  // -----------------------------------------------------------------------
+  // Actions
+  // -----------------------------------------------------------------------
 
   const saveCredentials = async () => {
     if (!selectedMp) return;
     setSaving(true);
     setSaveResult(null);
     try {
-      const r = await fetch("/api/settings", {
+      const r = await authFetch("/api/settings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ marketplace: selectedMp, credentials: creds }),
@@ -300,7 +420,7 @@ export default function Dashboard() {
       const data = await r.json();
       setSaveResult(data);
       if (data.success) {
-        const s = await fetch("/api/settings").then((r) => r.json());
+        const s = await authFetch("/api/settings").then((res) => res.json());
         setSettings(s);
       }
     } finally {
@@ -312,7 +432,7 @@ export default function Dashboard() {
     if (!settings?.shop.marketplace) return;
     setLoading(true);
     try {
-      const r = await fetch("/api/matching/auto", {
+      const r = await authFetch("/api/matching/auto", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ marketplace: settings.shop.marketplace }),
@@ -326,8 +446,13 @@ export default function Dashboard() {
   };
 
   const createManualMatch = async () => {
-    if (!selectedShopify || !selectedMarketplace || !settings?.shop.marketplace) return;
-    await fetch("/api/matching", {
+    if (
+      !selectedShopify ||
+      !selectedMarketplace ||
+      !settings?.shop.marketplace
+    )
+      return;
+    await authFetch("/api/matching", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -351,7 +476,7 @@ export default function Dashboard() {
   };
 
   const removeMatch = async (id: number) => {
-    await fetch(`/api/matching?id=${id}`, { method: "DELETE" });
+    await authFetch(`/api/matching?id=${id}`, { method: "DELETE" });
     await loadMatchings();
   };
 
@@ -360,10 +485,14 @@ export default function Dashboard() {
     setInvoiceSaving(true);
     setInvoiceSaveResult(null);
     try {
-      const r = await fetch("/api/invoices/settings", {
+      const r = await authFetch("/api/invoices/settings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ provider: selectedProvider, credentials: invoiceCreds, autoInvoice }),
+        body: JSON.stringify({
+          provider: selectedProvider,
+          credentials: invoiceCreds,
+          autoInvoice,
+        }),
       });
       const data = await r.json();
       setInvoiceSaveResult(data);
@@ -380,15 +509,25 @@ export default function Dashboard() {
     const price = parseFloat(invoiceForm.itemUnitPrice) || 0;
     const vat = parseFloat(invoiceForm.itemVatRate) || 0;
     if (!invoiceForm.itemName || price <= 0) return;
-    const totalPrice = Math.round(qty * price * (1 + vat / 100) * 100) / 100;
-    setInvoiceItems([...invoiceItems, {
-      name: invoiceForm.itemName,
-      quantity: qty,
-      unitPrice: price,
-      vatRate: vat,
-      totalPrice,
-    }]);
-    setInvoiceForm({ ...invoiceForm, itemName: "", itemQuantity: "1", itemUnitPrice: "", itemVatRate: "20" });
+    const totalPrice =
+      Math.round(qty * price * (1 + vat / 100) * 100) / 100;
+    setInvoiceItems([
+      ...invoiceItems,
+      {
+        name: invoiceForm.itemName,
+        quantity: qty,
+        unitPrice: price,
+        vatRate: vat,
+        totalPrice,
+      },
+    ]);
+    setInvoiceForm({
+      ...invoiceForm,
+      itemName: "",
+      itemQuantity: "1",
+      itemUnitPrice: "",
+      itemVatRate: "20",
+    });
   };
 
   const removeInvoiceItem = (idx: number) => {
@@ -396,11 +535,18 @@ export default function Dashboard() {
   };
 
   const createInvoice = async () => {
-    if (!invoiceForm.orderNumber || !invoiceForm.customerName || invoiceItems.length === 0) return;
+    if (
+      !invoiceForm.orderNumber ||
+      !invoiceForm.customerName ||
+      invoiceItems.length === 0
+    )
+      return;
     setCreatingInvoice(true);
     try {
-      const totalAmount = parseFloat(invoiceForm.totalAmount) || invoiceItems.reduce((sum, i) => sum + i.totalPrice, 0);
-      const r = await fetch("/api/invoices", {
+      const totalAmount =
+        parseFloat(invoiceForm.totalAmount) ||
+        invoiceItems.reduce((sum, i) => sum + i.totalPrice, 0);
+      const r = await authFetch("/api/invoices", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -418,566 +564,902 @@ export default function Dashboard() {
       const data = await r.json();
       if (data.success) {
         setShowInvoiceForm(false);
-        setInvoiceForm({ orderNumber: "", orderSource: "", customerName: "", customerTaxId: "", customerTaxOffice: "", customerAddress: "", customerCity: "", totalAmount: "", itemName: "", itemQuantity: "1", itemUnitPrice: "", itemVatRate: "20" });
+        setInvoiceForm({
+          orderNumber: "",
+          orderSource: "",
+          customerName: "",
+          customerTaxId: "",
+          customerTaxOffice: "",
+          customerAddress: "",
+          customerCity: "",
+          totalAmount: "",
+          itemName: "",
+          itemQuantity: "1",
+          itemUnitPrice: "",
+          itemVatRate: "20",
+        });
         setInvoiceItems([]);
         await loadInvoiceData();
-      } else {
-        alert(data.error || "Fatura olusturulamadi");
       }
     } finally {
       setCreatingInvoice(false);
     }
   };
 
-  if (!settings) return <div className="flex items-center justify-center h-screen"><div className="text-gray-500">Yükleniyor...</div></div>;
+  // -----------------------------------------------------------------------
+  // Loading state
+  // -----------------------------------------------------------------------
+
+  if (!settings) {
+    return (
+      <Page title="BayiPortal Entegrasyon">
+        <Layout>
+          <Layout.Section>
+            <Card>
+              <BlockStack align="center" inlineAlign="center">
+                <Spinner size="large" />
+                <Text as="p" variant="bodyMd">
+                  Yukleniyor...
+                </Text>
+              </BlockStack>
+            </Card>
+          </Layout.Section>
+        </Layout>
+      </Page>
+    );
+  }
 
   const activeMp = settings.marketplaces.find((m) => m.isActive);
+  const activeMatchCount = matchings.filter((m) => m.isActive).length;
 
-  return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <div className="bg-white border-b px-6 py-4">
-        <div className="max-w-6xl mx-auto flex items-center justify-between">
-          <div>
-            <h1 className="text-xl font-bold text-gray-900">BayiPortal Entegrasyon</h1>
-            <p className="text-sm text-gray-500">{settings.shop.domain}</p>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="px-3 py-1 bg-blue-50 text-blue-700 text-xs font-medium rounded-full">
-              {settings.shop.plan === "free" ? "Ücretsiz" : settings.shop.plan} — {matchings.filter((m) => m.isActive).length}/{settings.shop.productLimit} ürün
-            </span>
-          </div>
-        </div>
-      </div>
+  // -----------------------------------------------------------------------
+  // Tab content renderers
+  // -----------------------------------------------------------------------
 
-      {/* Tabs */}
-      <div className="max-w-6xl mx-auto px-6 mt-6">
-        <div className="flex gap-1 bg-gray-100 p-1 rounded-lg w-fit">
-          {[
-            { id: "setup" as const, label: "Kurulum" },
-            { id: "matching" as const, label: "Ürün Eşleştirme" },
-            { id: "logs" as const, label: "Sync Logları" },
-            { id: "invoice" as const, label: "E-Fatura" },
-          ].map((t) => (
-            <button
-              key={t.id}
-              onClick={() => setTab(t.id)}
-              className={`px-4 py-2 text-sm font-medium rounded-md transition ${
-                tab === t.id ? "bg-white shadow text-gray-900" : "text-gray-500 hover:text-gray-700"
-              }`}
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
-      </div>
+  const renderSetupTab = () => (
+    <Layout>
+      <Layout.Section>
+        <Card>
+          <BlockStack gap="400">
+            <Text as="h2" variant="headingMd">
+              Pazaryeri Baglantisi
+            </Text>
+            <Text as="p" variant="bodyMd" tone="subdued">
+              {settings.shop.plan === "free"
+                ? "Ucretsiz planda 1 pazaryeri, 10 urune kadar entegrasyon yapabilirsiniz."
+                : "Pazaryeri bilgilerinizi girin ve baglantiyi test edin."}
+            </Text>
 
-      <div className="max-w-6xl mx-auto px-6 py-6">
-        {/* SETUP TAB */}
-        {tab === "setup" && (
-          <div className="space-y-6">
-            <div className="bg-white rounded-xl border p-6">
-              <h2 className="text-lg font-semibold mb-4">Pazaryeri Bağlantısı</h2>
-              <p className="text-sm text-gray-500 mb-6">
-                {settings.shop.plan === "free"
-                  ? "Ücretsiz planda 1 pazaryeri, 10 ürüne kadar entegrasyon yapabilirsiniz."
-                  : "Pazaryeri bilgilerinizi girin ve bağlantıyı test edin."}
-              </p>
-
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-                {MARKETPLACES.map((mp) => {
-                  const configured = settings.marketplaces.find((m) => m.marketplace === mp.id);
-                  return (
+            <InlineGrid columns={{ xs: 2, md: 4 }} gap="300">
+              {MARKETPLACES.map((mp) => {
+                const configured = settings.marketplaces.find(
+                  (m) => m.marketplace === mp.id,
+                );
+                const isSelected = selectedMp === mp.id;
+                return (
+                  <Box
+                    key={mp.id}
+                    padding="400"
+                    borderWidth="025"
+                    borderColor={
+                      isSelected
+                        ? "border-info"
+                        : configured?.isActive
+                          ? "border-success"
+                          : "border"
+                    }
+                    borderRadius="200"
+                    background={
+                      isSelected
+                        ? "bg-surface-info"
+                        : configured?.isActive
+                          ? "bg-surface-success"
+                          : "bg-surface"
+                    }
+                  >
                     <button
-                      key={mp.id}
-                      onClick={() => { setSelectedMp(mp.id); setCreds({}); setSaveResult(null); }}
-                      className={`p-4 rounded-lg border-2 text-center transition ${
-                        selectedMp === mp.id
-                          ? "border-blue-500 bg-blue-50"
-                          : configured?.isActive
-                          ? "border-green-300 bg-green-50"
-                          : "border-gray-200 hover:border-gray-300"
-                      }`}
+                      type="button"
+                      onClick={() => {
+                        setSelectedMp(mp.id);
+                        setCreds({});
+                        setSaveResult(null);
+                      }}
+                      style={{
+                        all: "unset",
+                        cursor: "pointer",
+                        display: "block",
+                        width: "100%",
+                        textAlign: "center",
+                      }}
                     >
-                      <div className="font-semibold text-sm">{mp.name}</div>
-                      {configured?.isActive && (
-                        <div className="text-xs text-green-600 mt-1">Bağlı</div>
-                      )}
+                      <BlockStack gap="100" align="center" inlineAlign="center">
+                        <Text as="span" variant="bodyMd" fontWeight="semibold">
+                          {mp.name}
+                        </Text>
+                        {configured?.isActive && (
+                          <Badge tone="success">Bagli</Badge>
+                        )}
+                      </BlockStack>
                     </button>
-                  );
-                })}
-              </div>
+                  </Box>
+                );
+              })}
+            </InlineGrid>
 
-              {selectedMp && (
-                <div className="border-t pt-6">
-                  <h3 className="font-medium mb-4">{MARKETPLACES.find((m) => m.id === selectedMp)?.name} Ayarları</h3>
-                  <div className="space-y-4 max-w-md">
-                    {MARKETPLACES.find((m) => m.id === selectedMp)?.fields.map((field) => (
-                      <div key={field.key}>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">{field.label}</label>
-                        <input
-                          type={field.type || "text"}
-                          value={creds[field.key] || ""}
-                          onChange={(e) => setCreds({ ...creds, [field.key]: e.target.value })}
-                          className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        />
-                      </div>
-                    ))}
-                    <button
-                      onClick={saveCredentials}
-                      disabled={saving}
-                      className="px-6 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
-                    >
-                      {saving ? "Test ediliyor..." : "Kaydet ve Test Et"}
-                    </button>
-                    {saveResult && (
-                      <div className={`p-3 rounded-lg text-sm ${saveResult.success ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"}`}>
-                        {saveResult.success ? "Bağlantı başarılı!" : `Hata: ${saveResult.error}`}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* MATCHING TAB */}
-        {tab === "matching" && (
-          <div className="space-y-6">
-            {!activeMp ? (
-              <div className="bg-white rounded-xl border p-8 text-center">
-                <p className="text-gray-500">Önce Kurulum sekmesinden bir pazaryeri bağlayın.</p>
-              </div>
-            ) : (
+            {selectedMp && (
               <>
-                {/* Auto match */}
-                <div className="bg-white rounded-xl border p-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <div>
-                      <h2 className="text-lg font-semibold">Otomatik Eşleştirme</h2>
-                      <p className="text-sm text-gray-500">Barkod ve SKU eşleşen ürünler otomatik eşleştirilir.</p>
-                    </div>
-                    <button
-                      onClick={runAutoMatch}
-                      disabled={loading}
-                      className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 disabled:opacity-50"
-                    >
-                      {loading ? "Eşleştiriliyor..." : "Otomatik Eşleştir"}
-                    </button>
-                  </div>
-                  {autoMatchResult && (
-                    <div className="p-3 bg-blue-50 text-blue-700 rounded-lg text-sm">
-                      {autoMatchResult.matched} ürün eşleştirildi, {autoMatchResult.unmatched} ürün eşleşmedi.
-                    </div>
+                <Divider />
+                <Text as="h3" variant="headingSm">
+                  {MARKETPLACES.find((m) => m.id === selectedMp)?.name} Ayarlari
+                </Text>
+                <FormLayout>
+                  {MARKETPLACES.find((m) => m.id === selectedMp)?.fields.map(
+                    (field) => (
+                      <TextField
+                        key={field.key}
+                        label={field.label}
+                        type={field.type === "password" ? "password" : "text"}
+                        value={creds[field.key] || ""}
+                        onChange={(val) =>
+                          setCreds({ ...creds, [field.key]: val })
+                        }
+                        autoComplete="off"
+                      />
+                    ),
                   )}
-                </div>
-
-                {/* Current matchings */}
-                <div className="bg-white rounded-xl border p-6">
-                  <h2 className="text-lg font-semibold mb-4">
-                    Eşleştirilmiş Ürünler ({matchings.filter((m) => m.isActive).length}/{settings.shop.productLimit})
-                  </h2>
-                  {matchings.filter((m) => m.isActive).length === 0 ? (
-                    <p className="text-gray-500 text-sm">Henüz eşleştirme yok. Otomatik eşleştirmeyi deneyin veya manuel eşleştirin.</p>
-                  ) : (
-                    <div className="space-y-2">
-                      {matchings.filter((m) => m.isActive).map((m) => (
-                        <div key={m.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                          <div className="flex-1">
-                            <div className="text-sm font-medium">{m.shopifyTitle || "Shopify Ürün"}</div>
-                            <div className="text-xs text-gray-500">
-                              {m.shopifyBarcode && `Barkod: ${m.shopifyBarcode}`}
-                              {m.shopifySku && ` | SKU: ${m.shopifySku}`}
-                            </div>
-                          </div>
-                          <div className="px-3 text-gray-400">↔</div>
-                          <div className="flex-1">
-                            <div className="text-sm font-medium">{m.marketplaceTitle || "Pazaryeri Ürün"}</div>
-                            <div className="text-xs text-gray-500">
-                              {m.marketplaceBarcode && `Barkod: ${m.marketplaceBarcode}`}
-                              {` | ${m.matchType}`}
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-2 ml-4">
-                            {m.lastSyncStatus === "success" && <span className="w-2 h-2 rounded-full bg-green-500" />}
-                            {m.lastSyncStatus === "error" && <span className="w-2 h-2 rounded-full bg-red-500" />}
-                            <button onClick={() => removeMatch(m.id)} className="text-red-500 hover:text-red-700 text-xs">Kaldır</button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                {/* Manual match */}
-                <div className="bg-white rounded-xl border p-6">
-                  <h2 className="text-lg font-semibold mb-4">Manuel Eşleştirme</h2>
-                  <div className="grid grid-cols-2 gap-6">
-                    {/* Shopify side */}
-                    <div>
-                      <h3 className="text-sm font-medium text-gray-700 mb-2">Shopify Ürünleri</h3>
-                      <div className="max-h-96 overflow-y-auto space-y-1 border rounded-lg p-2">
-                        {shopifyProducts.map((p) =>
-                          (p.variants as unknown as ShopifyVariant[]).map((v) => (
-                            <button
-                              key={`${p.shopifyProductId}-${v.id}`}
-                              onClick={() => setSelectedShopify({ product: p, variant: v })}
-                              className={`w-full text-left p-2 rounded text-sm ${
-                                selectedShopify?.variant.id === v.id ? "bg-blue-100 border-blue-300 border" : "hover:bg-gray-50"
-                              }`}
-                            >
-                              <div className="font-medium truncate">{p.title}</div>
-                              <div className="text-xs text-gray-500">
-                                {v.title} | {v.barcode || "Barkod yok"} | Stok: {v.inventory_quantity}
-                              </div>
-                            </button>
-                          ))
-                        )}
-                      </div>
-                    </div>
-                    {/* Marketplace side */}
-                    <div>
-                      <h3 className="text-sm font-medium text-gray-700 mb-2">Pazaryeri Ürünleri</h3>
-                      <div className="max-h-96 overflow-y-auto space-y-1 border rounded-lg p-2">
-                        {mpProducts.map((p) =>
-                          (p.variants as unknown as MarketplaceVariant[]).map((v) => (
-                            <button
-                              key={`${p.externalProductId}-${v.id}`}
-                              onClick={() => setSelectedMarketplace({ product: p, variant: v })}
-                              className={`w-full text-left p-2 rounded text-sm ${
-                                selectedMarketplace?.variant.id === v.id ? "bg-green-100 border-green-300 border" : "hover:bg-gray-50"
-                              }`}
-                            >
-                              <div className="font-medium truncate">{p.title}</div>
-                              <div className="text-xs text-gray-500">
-                                {v.title} | {v.barcode || "Barkod yok"} | Stok: {v.stockQuantity}
-                              </div>
-                            </button>
-                          ))
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                  {selectedShopify && selectedMarketplace && (
-                    <div className="mt-4 p-3 bg-blue-50 rounded-lg flex items-center justify-between">
-                      <span className="text-sm">
-                        <strong>{selectedShopify.product.title}</strong> ↔ <strong>{selectedMarketplace.product.title}</strong>
-                      </span>
-                      <button onClick={createManualMatch} className="px-4 py-1.5 bg-blue-600 text-white rounded text-sm font-medium">
-                        Eşleştir
-                      </button>
-                    </div>
-                  )}
-                </div>
+                  <Button
+                    variant="primary"
+                    onClick={saveCredentials}
+                    loading={saving}
+                  >
+                    Kaydet ve Test Et
+                  </Button>
+                </FormLayout>
+                {saveResult && (
+                  <Banner
+                    title={
+                      saveResult.success
+                        ? "Baglanti basarili!"
+                        : `Hata: ${saveResult.error}`
+                    }
+                    tone={saveResult.success ? "success" : "critical"}
+                    onDismiss={() => setSaveResult(null)}
+                  />
+                )}
               </>
             )}
-          </div>
-        )}
+          </BlockStack>
+        </Card>
+      </Layout.Section>
+    </Layout>
+  );
 
-        {/* LOGS TAB */}
-        {tab === "logs" && (
-          <div className="bg-white rounded-xl border p-6">
-            <h2 className="text-lg font-semibold mb-4">Sync Logları</h2>
-            <p className="text-sm text-gray-500">Son sync işlemleri burada görünecek.</p>
-            {/* TODO: Fetch and display sync logs */}
-          </div>
-        )}
+  const renderMatchingTab = () => {
+    if (!activeMp) {
+      return (
+        <Layout>
+          <Layout.Section>
+            <Card>
+              <EmptyState
+                heading="Pazaryeri baglantisi gerekli"
+                image=""
+              >
+                <p>
+                  Once Kurulum sekmesinden bir pazaryeri baglayin.
+                </p>
+              </EmptyState>
+            </Card>
+          </Layout.Section>
+        </Layout>
+      );
+    }
 
-        {/* INVOICE TAB */}
-        {tab === "invoice" && (
-          <div className="space-y-6">
-            {/* Provider Selection & Settings */}
-            <div className="bg-white rounded-xl border p-6">
-              <h2 className="text-lg font-semibold mb-4">E-Fatura Entegrasyonu</h2>
-              <p className="text-sm text-gray-500 mb-6">
-                Fatura saglayicinizi secin ve bilgilerinizi girin.
-              </p>
+    const activeMatchings = matchings.filter((m) => m.isActive);
 
-              <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
-                {INVOICE_PROVIDERS.map((p) => (
-                  <button
-                    key={p.id}
-                    onClick={() => { setSelectedProvider(p.id); setInvoiceCreds({}); setInvoiceSaveResult(null); }}
-                    className={`p-4 rounded-lg border-2 text-center transition ${
-                      selectedProvider === p.id
-                        ? "border-blue-500 bg-blue-50"
-                        : invoiceSettings?.configured && invoiceSettings.provider === p.id
-                        ? "border-green-300 bg-green-50"
-                        : "border-gray-200 hover:border-gray-300"
-                    }`}
-                  >
-                    <div className="font-semibold text-sm">{p.name}</div>
-                    {invoiceSettings?.configured && invoiceSettings.provider === p.id && (
-                      <div className="text-xs text-green-600 mt-1">Aktif</div>
-                    )}
-                  </button>
-                ))}
-              </div>
-
-              {selectedProvider && (
-                <div className="border-t pt-6">
-                  <h3 className="font-medium mb-4">{INVOICE_PROVIDERS.find((p) => p.id === selectedProvider)?.name} Ayarlari</h3>
-                  <div className="space-y-4 max-w-md">
-                    {INVOICE_PROVIDERS.find((p) => p.id === selectedProvider)?.fields.map((field) => (
-                      <div key={field.key}>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">{field.label}</label>
-                        <input
-                          type={field.type || "text"}
-                          value={invoiceCreds[field.key] || ""}
-                          onChange={(e) => setInvoiceCreds({ ...invoiceCreds, [field.key]: e.target.value })}
-                          className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        />
-                      </div>
-                    ))}
-                    <div className="flex items-center gap-3">
-                      <label className="flex items-center gap-2 text-sm">
-                        <input
-                          type="checkbox"
-                          checked={autoInvoice}
-                          onChange={(e) => setAutoInvoice(e.target.checked)}
-                          className="rounded border-gray-300"
-                        />
-                        Siparislerde otomatik fatura olustur
-                      </label>
-                    </div>
-                    <button
-                      onClick={saveInvoiceSettings}
-                      disabled={invoiceSaving}
-                      className="px-6 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
-                    >
-                      {invoiceSaving ? "Test ediliyor..." : "Kaydet ve Test Et"}
-                    </button>
-                    {invoiceSaveResult && (
-                      <div className={`p-3 rounded-lg text-sm ${invoiceSaveResult.success ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"}`}>
-                        {invoiceSaveResult.success ? "Baglanti basarili!" : `Hata: ${invoiceSaveResult.error}`}
-                      </div>
-                    )}
-                  </div>
-                </div>
+    return (
+      <Layout>
+        {/* Auto match */}
+        <Layout.Section>
+          <Card>
+            <BlockStack gap="400">
+              <InlineStack align="space-between" blockAlign="center">
+                <BlockStack gap="100">
+                  <Text as="h2" variant="headingMd">
+                    Otomatik Eslestirme
+                  </Text>
+                  <Text as="p" variant="bodyMd" tone="subdued">
+                    Barkod ve SKU eslesen urunler otomatik eslestirilir.
+                  </Text>
+                </BlockStack>
+                <Button
+                  variant="primary"
+                  onClick={runAutoMatch}
+                  loading={loading}
+                >
+                  Otomatik Eslestir
+                </Button>
+              </InlineStack>
+              {autoMatchResult && (
+                <Banner
+                  title={`${autoMatchResult.matched} urun eslestirildi, ${autoMatchResult.unmatched} urun eslesmedi.`}
+                  tone="info"
+                  onDismiss={() => setAutoMatchResult(null)}
+                />
               )}
-            </div>
+            </BlockStack>
+          </Card>
+        </Layout.Section>
 
-            {/* Create Invoice */}
-            {invoiceSettings?.configured && invoiceSettings.isActive && (
-              <div className="bg-white rounded-xl border p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-lg font-semibold">Manuel Fatura Olustur</h2>
-                  <button
-                    onClick={() => setShowInvoiceForm(!showInvoiceForm)}
-                    className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700"
+        {/* Current matchings */}
+        <Layout.Section>
+          <Card>
+            <BlockStack gap="400">
+              <Text as="h2" variant="headingMd">
+                Eslestirilmis Urunler ({activeMatchCount}/
+                {settings.shop.productLimit})
+              </Text>
+              {activeMatchings.length === 0 ? (
+                <Text as="p" variant="bodyMd" tone="subdued">
+                  Henuz eslestirme yok. Otomatik eslestirmeyi deneyin veya
+                  manuel eslestirin.
+                </Text>
+              ) : (
+                <DataTable
+                  columnContentTypes={[
+                    "text",
+                    "text",
+                    "text",
+                    "text",
+                    "text",
+                  ]}
+                  headings={[
+                    "Shopify Urun",
+                    "Pazaryeri Urun",
+                    "Eslesme Tipi",
+                    "Durum",
+                    "Islem",
+                  ]}
+                  rows={activeMatchings.map((m) => [
+                    m.shopifyTitle || "Shopify Urun",
+                    m.marketplaceTitle || "Pazaryeri Urun",
+                    m.matchType,
+                    syncStatusBadge(m.lastSyncStatus),
+                    <Button
+                      key={m.id}
+                      variant="plain"
+                      tone="critical"
+                      onClick={() => removeMatch(m.id)}
+                    >
+                      Kaldir
+                    </Button>,
+                  ])}
+                />
+              )}
+            </BlockStack>
+          </Card>
+        </Layout.Section>
+
+        {/* Manual match */}
+        <Layout.Section>
+          <Card>
+            <BlockStack gap="400">
+              <Text as="h2" variant="headingMd">
+                Manuel Eslestirme
+              </Text>
+              <InlineGrid columns={{ xs: 1, md: 2 }} gap="400">
+                {/* Shopify side */}
+                <Card>
+                  <BlockStack gap="200">
+                    <Text as="h3" variant="headingSm">
+                      Shopify Urunleri
+                    </Text>
+                    <div style={{ maxHeight: "400px", overflowY: "auto" }}>
+                      <BlockStack gap="100">
+                        {shopifyProducts.map((p) =>
+                          (p.variants as unknown as ShopifyVariant[]).map(
+                            (v) => {
+                              const isSelected =
+                                selectedShopify?.variant.id === v.id;
+                              return (
+                                <Box
+                                  key={`${p.shopifyProductId}-${v.id}`}
+                                  padding="200"
+                                  borderWidth="025"
+                                  borderColor={
+                                    isSelected ? "border-info" : "border"
+                                  }
+                                  borderRadius="100"
+                                  background={
+                                    isSelected
+                                      ? "bg-surface-info"
+                                      : "bg-surface"
+                                  }
+                                >
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setSelectedShopify({
+                                        product: p,
+                                        variant: v,
+                                      })
+                                    }
+                                    style={{
+                                      all: "unset",
+                                      cursor: "pointer",
+                                      display: "block",
+                                      width: "100%",
+                                    }}
+                                  >
+                                    <BlockStack gap="050">
+                                      <Text
+                                        as="span"
+                                        variant="bodyMd"
+                                        fontWeight="semibold"
+                                        truncate
+                                      >
+                                        {p.title}
+                                      </Text>
+                                      <Text
+                                        as="span"
+                                        variant="bodySm"
+                                        tone="subdued"
+                                      >
+                                        {v.title} |{" "}
+                                        {v.barcode || "Barkod yok"} | Stok:{" "}
+                                        {v.inventory_quantity}
+                                      </Text>
+                                    </BlockStack>
+                                  </button>
+                                </Box>
+                              );
+                            },
+                          ),
+                        )}
+                      </BlockStack>
+                    </div>
+                  </BlockStack>
+                </Card>
+
+                {/* Marketplace side */}
+                <Card>
+                  <BlockStack gap="200">
+                    <Text as="h3" variant="headingSm">
+                      Pazaryeri Urunleri
+                    </Text>
+                    <div style={{ maxHeight: "400px", overflowY: "auto" }}>
+                      <BlockStack gap="100">
+                        {mpProducts.map((p) =>
+                          (
+                            p.variants as unknown as MarketplaceVariant[]
+                          ).map((v) => {
+                            const isSelected =
+                              selectedMarketplace?.variant.id === v.id;
+                            return (
+                              <Box
+                                key={`${p.externalProductId}-${v.id}`}
+                                padding="200"
+                                borderWidth="025"
+                                borderColor={
+                                  isSelected ? "border-success" : "border"
+                                }
+                                borderRadius="100"
+                                background={
+                                  isSelected
+                                    ? "bg-surface-success"
+                                    : "bg-surface"
+                                }
+                              >
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setSelectedMarketplace({
+                                      product: p,
+                                      variant: v,
+                                    })
+                                  }
+                                  style={{
+                                    all: "unset",
+                                    cursor: "pointer",
+                                    display: "block",
+                                    width: "100%",
+                                  }}
+                                >
+                                  <BlockStack gap="050">
+                                    <Text
+                                      as="span"
+                                      variant="bodyMd"
+                                      fontWeight="semibold"
+                                      truncate
+                                    >
+                                      {p.title}
+                                    </Text>
+                                    <Text
+                                      as="span"
+                                      variant="bodySm"
+                                      tone="subdued"
+                                    >
+                                      {v.title} |{" "}
+                                      {v.barcode || "Barkod yok"} | Stok:{" "}
+                                      {v.stockQuantity}
+                                    </Text>
+                                  </BlockStack>
+                                </button>
+                              </Box>
+                            );
+                          }),
+                        )}
+                      </BlockStack>
+                    </div>
+                  </BlockStack>
+                </Card>
+              </InlineGrid>
+
+              {selectedShopify && selectedMarketplace && (
+                <Banner
+                  title={`${selectedShopify.product.title} ↔ ${selectedMarketplace.product.title}`}
+                  tone="info"
+                  action={{
+                    content: "Eslestir",
+                    onAction: createManualMatch,
+                  }}
+                />
+              )}
+            </BlockStack>
+          </Card>
+        </Layout.Section>
+      </Layout>
+    );
+  };
+
+  const renderLogsTab = () => (
+    <Layout>
+      <Layout.Section>
+        <Card>
+          <BlockStack gap="200">
+            <Text as="h2" variant="headingMd">
+              Sync Loglari
+            </Text>
+            <Text as="p" variant="bodyMd" tone="subdued">
+              Son sync islemleri burada gorunecek.
+            </Text>
+          </BlockStack>
+        </Card>
+      </Layout.Section>
+    </Layout>
+  );
+
+  const renderInvoiceTab = () => (
+    <Layout>
+      {/* Provider Selection & Settings */}
+      <Layout.Section>
+        <Card>
+          <BlockStack gap="400">
+            <Text as="h2" variant="headingMd">
+              E-Fatura Entegrasyonu
+            </Text>
+            <Text as="p" variant="bodyMd" tone="subdued">
+              Fatura saglayicinizi secin ve bilgilerinizi girin.
+            </Text>
+
+            <InlineGrid columns={{ xs: 2, md: 5 }} gap="300">
+              {INVOICE_PROVIDERS.map((p) => {
+                const isSelected = selectedProvider === p.id;
+                const isConfigured =
+                  invoiceSettings?.configured &&
+                  invoiceSettings.provider === p.id;
+                return (
+                  <Box
+                    key={p.id}
+                    padding="400"
+                    borderWidth="025"
+                    borderColor={
+                      isSelected
+                        ? "border-info"
+                        : isConfigured
+                          ? "border-success"
+                          : "border"
+                    }
+                    borderRadius="200"
+                    background={
+                      isSelected
+                        ? "bg-surface-info"
+                        : isConfigured
+                          ? "bg-surface-success"
+                          : "bg-surface"
+                    }
                   >
-                    {showInvoiceForm ? "Kapat" : "Yeni Fatura"}
-                  </button>
-                </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedProvider(p.id);
+                        setInvoiceCreds({});
+                        setInvoiceSaveResult(null);
+                      }}
+                      style={{
+                        all: "unset",
+                        cursor: "pointer",
+                        display: "block",
+                        width: "100%",
+                        textAlign: "center",
+                      }}
+                    >
+                      <BlockStack gap="100" align="center" inlineAlign="center">
+                        <Text as="span" variant="bodyMd" fontWeight="semibold">
+                          {p.name}
+                        </Text>
+                        {isConfigured && (
+                          <Badge tone="success">Aktif</Badge>
+                        )}
+                      </BlockStack>
+                    </button>
+                  </Box>
+                );
+              })}
+            </InlineGrid>
 
-                {showInvoiceForm && (
-                  <div className="border-t pt-4 space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Siparis No *</label>
-                        <input
-                          type="text"
-                          value={invoiceForm.orderNumber}
-                          onChange={(e) => setInvoiceForm({ ...invoiceForm, orderNumber: e.target.value })}
-                          className="w-full px-3 py-2 border rounded-lg text-sm"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Siparis Kaynagi</label>
-                        <select
-                          value={invoiceForm.orderSource}
-                          onChange={(e) => setInvoiceForm({ ...invoiceForm, orderSource: e.target.value })}
-                          className="w-full px-3 py-2 border rounded-lg text-sm"
-                        >
-                          <option value="">Seciniz</option>
-                          <option value="shopify">Shopify</option>
-                          <option value="trendyol">Trendyol</option>
-                          <option value="hepsiburada">Hepsiburada</option>
-                          <option value="n11">N11</option>
-                        </select>
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Musteri Adi *</label>
-                        <input
-                          type="text"
-                          value={invoiceForm.customerName}
-                          onChange={(e) => setInvoiceForm({ ...invoiceForm, customerName: e.target.value })}
-                          className="w-full px-3 py-2 border rounded-lg text-sm"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">VKN / TCKN</label>
-                        <input
-                          type="text"
-                          value={invoiceForm.customerTaxId}
-                          onChange={(e) => setInvoiceForm({ ...invoiceForm, customerTaxId: e.target.value })}
-                          className="w-full px-3 py-2 border rounded-lg text-sm"
-                        />
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-3 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Vergi Dairesi</label>
-                        <input
-                          type="text"
-                          value={invoiceForm.customerTaxOffice}
-                          onChange={(e) => setInvoiceForm({ ...invoiceForm, customerTaxOffice: e.target.value })}
-                          className="w-full px-3 py-2 border rounded-lg text-sm"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Adres</label>
-                        <input
-                          type="text"
-                          value={invoiceForm.customerAddress}
-                          onChange={(e) => setInvoiceForm({ ...invoiceForm, customerAddress: e.target.value })}
-                          className="w-full px-3 py-2 border rounded-lg text-sm"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Sehir</label>
-                        <input
-                          type="text"
-                          value={invoiceForm.customerCity}
-                          onChange={(e) => setInvoiceForm({ ...invoiceForm, customerCity: e.target.value })}
-                          className="w-full px-3 py-2 border rounded-lg text-sm"
-                        />
-                      </div>
-                    </div>
-
-                    {/* Invoice Items */}
-                    <div className="border-t pt-4">
-                      <h3 className="text-sm font-medium text-gray-700 mb-3">Fatura Kalemleri</h3>
-                      {invoiceItems.length > 0 && (
-                        <div className="space-y-2 mb-4">
-                          {invoiceItems.map((item, idx) => (
-                            <div key={idx} className="flex items-center justify-between p-2 bg-gray-50 rounded text-sm">
-                              <span className="flex-1">{item.name}</span>
-                              <span className="w-16 text-center">{item.quantity} ad.</span>
-                              <span className="w-24 text-right">{item.unitPrice.toFixed(2)} TL</span>
-                              <span className="w-16 text-center">%{item.vatRate}</span>
-                              <span className="w-24 text-right font-medium">{item.totalPrice.toFixed(2)} TL</span>
-                              <button onClick={() => removeInvoiceItem(idx)} className="ml-2 text-red-500 hover:text-red-700 text-xs">Sil</button>
-                            </div>
-                          ))}
-                          <div className="text-right text-sm font-semibold">
-                            Toplam: {invoiceItems.reduce((s, i) => s + i.totalPrice, 0).toFixed(2)} TL
-                          </div>
-                        </div>
-                      )}
-                      <div className="flex gap-2 items-end">
-                        <div className="flex-1">
-                          <label className="block text-xs text-gray-500 mb-1">Urun Adi</label>
-                          <input
-                            type="text"
-                            value={invoiceForm.itemName}
-                            onChange={(e) => setInvoiceForm({ ...invoiceForm, itemName: e.target.value })}
-                            className="w-full px-2 py-1.5 border rounded text-sm"
-                          />
-                        </div>
-                        <div className="w-20">
-                          <label className="block text-xs text-gray-500 mb-1">Adet</label>
-                          <input
-                            type="number"
-                            value={invoiceForm.itemQuantity}
-                            onChange={(e) => setInvoiceForm({ ...invoiceForm, itemQuantity: e.target.value })}
-                            className="w-full px-2 py-1.5 border rounded text-sm"
-                          />
-                        </div>
-                        <div className="w-28">
-                          <label className="block text-xs text-gray-500 mb-1">Birim Fiyat</label>
-                          <input
-                            type="number"
-                            step="0.01"
-                            value={invoiceForm.itemUnitPrice}
-                            onChange={(e) => setInvoiceForm({ ...invoiceForm, itemUnitPrice: e.target.value })}
-                            className="w-full px-2 py-1.5 border rounded text-sm"
-                          />
-                        </div>
-                        <div className="w-20">
-                          <label className="block text-xs text-gray-500 mb-1">KDV %</label>
-                          <input
-                            type="number"
-                            value={invoiceForm.itemVatRate}
-                            onChange={(e) => setInvoiceForm({ ...invoiceForm, itemVatRate: e.target.value })}
-                            className="w-full px-2 py-1.5 border rounded text-sm"
-                          />
-                        </div>
-                        <button
-                          onClick={addInvoiceItem}
-                          className="px-3 py-1.5 bg-gray-200 text-gray-700 rounded text-sm hover:bg-gray-300"
-                        >
-                          Ekle
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="border-t pt-4 flex justify-end">
-                      <button
-                        onClick={createInvoice}
-                        disabled={creatingInvoice || invoiceItems.length === 0 || !invoiceForm.orderNumber || !invoiceForm.customerName}
-                        className="px-6 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
-                      >
-                        {creatingInvoice ? "Gonderiliyor..." : "Fatura Olustur"}
-                      </button>
-                    </div>
-                  </div>
+            {selectedProvider && (
+              <>
+                <Divider />
+                <Text as="h3" variant="headingSm">
+                  {
+                    INVOICE_PROVIDERS.find((p) => p.id === selectedProvider)
+                      ?.name
+                  }{" "}
+                  Ayarlari
+                </Text>
+                <FormLayout>
+                  {INVOICE_PROVIDERS.find(
+                    (p) => p.id === selectedProvider,
+                  )?.fields.map((field) => (
+                    <TextField
+                      key={field.key}
+                      label={field.label}
+                      type={field.type === "password" ? "password" : "text"}
+                      value={invoiceCreds[field.key] || ""}
+                      onChange={(val) =>
+                        setInvoiceCreds({
+                          ...invoiceCreds,
+                          [field.key]: val,
+                        })
+                      }
+                      autoComplete="off"
+                    />
+                  ))}
+                  <Checkbox
+                    label="Siparislerde otomatik fatura olustur"
+                    checked={autoInvoice}
+                    onChange={setAutoInvoice}
+                  />
+                  <Button
+                    variant="primary"
+                    onClick={saveInvoiceSettings}
+                    loading={invoiceSaving}
+                  >
+                    Kaydet ve Test Et
+                  </Button>
+                </FormLayout>
+                {invoiceSaveResult && (
+                  <Banner
+                    title={
+                      invoiceSaveResult.success
+                        ? "Baglanti basarili!"
+                        : `Hata: ${invoiceSaveResult.error}`
+                    }
+                    tone={
+                      invoiceSaveResult.success ? "success" : "critical"
+                    }
+                    onDismiss={() => setInvoiceSaveResult(null)}
+                  />
                 )}
-              </div>
+              </>
+            )}
+          </BlockStack>
+        </Card>
+      </Layout.Section>
+
+      {/* Create Invoice Modal */}
+      {invoiceSettings?.configured && invoiceSettings.isActive && (
+        <Layout.Section>
+          <Card>
+            <BlockStack gap="400">
+              <InlineStack align="space-between" blockAlign="center">
+                <Text as="h2" variant="headingMd">
+                  Manuel Fatura Olustur
+                </Text>
+                <Button
+                  variant="primary"
+                  onClick={() => setShowInvoiceForm(true)}
+                >
+                  Yeni Fatura
+                </Button>
+              </InlineStack>
+            </BlockStack>
+          </Card>
+        </Layout.Section>
+      )}
+
+      <Modal
+        open={showInvoiceForm}
+        onClose={() => setShowInvoiceForm(false)}
+        title="Yeni Fatura Olustur"
+        size="large"
+        primaryAction={{
+          content: creatingInvoice ? "Gonderiliyor..." : "Fatura Olustur",
+          onAction: createInvoice,
+          disabled:
+            creatingInvoice ||
+            invoiceItems.length === 0 ||
+            !invoiceForm.orderNumber ||
+            !invoiceForm.customerName,
+          loading: creatingInvoice,
+        }}
+        secondaryActions={[
+          {
+            content: "Iptal",
+            onAction: () => setShowInvoiceForm(false),
+          },
+        ]}
+      >
+        <Modal.Section>
+          <FormLayout>
+            <FormLayout.Group>
+              <TextField
+                label="Siparis No *"
+                value={invoiceForm.orderNumber}
+                onChange={(val) =>
+                  setInvoiceForm({ ...invoiceForm, orderNumber: val })
+                }
+                autoComplete="off"
+              />
+              <Select
+                label="Siparis Kaynagi"
+                options={[
+                  { label: "Seciniz", value: "" },
+                  { label: "Shopify", value: "shopify" },
+                  { label: "Trendyol", value: "trendyol" },
+                  { label: "Hepsiburada", value: "hepsiburada" },
+                  { label: "N11", value: "n11" },
+                ]}
+                value={invoiceForm.orderSource}
+                onChange={(val) =>
+                  setInvoiceForm({ ...invoiceForm, orderSource: val })
+                }
+              />
+            </FormLayout.Group>
+            <FormLayout.Group>
+              <TextField
+                label="Musteri Adi *"
+                value={invoiceForm.customerName}
+                onChange={(val) =>
+                  setInvoiceForm({ ...invoiceForm, customerName: val })
+                }
+                autoComplete="off"
+              />
+              <TextField
+                label="VKN / TCKN"
+                value={invoiceForm.customerTaxId}
+                onChange={(val) =>
+                  setInvoiceForm({ ...invoiceForm, customerTaxId: val })
+                }
+                autoComplete="off"
+              />
+            </FormLayout.Group>
+            <FormLayout.Group>
+              <TextField
+                label="Vergi Dairesi"
+                value={invoiceForm.customerTaxOffice}
+                onChange={(val) =>
+                  setInvoiceForm({
+                    ...invoiceForm,
+                    customerTaxOffice: val,
+                  })
+                }
+                autoComplete="off"
+              />
+              <TextField
+                label="Adres"
+                value={invoiceForm.customerAddress}
+                onChange={(val) =>
+                  setInvoiceForm({
+                    ...invoiceForm,
+                    customerAddress: val,
+                  })
+                }
+                autoComplete="off"
+              />
+              <TextField
+                label="Sehir"
+                value={invoiceForm.customerCity}
+                onChange={(val) =>
+                  setInvoiceForm({ ...invoiceForm, customerCity: val })
+                }
+                autoComplete="off"
+              />
+            </FormLayout.Group>
+          </FormLayout>
+        </Modal.Section>
+        <Modal.Section>
+          <BlockStack gap="400">
+            <Text as="h3" variant="headingSm">
+              Fatura Kalemleri
+            </Text>
+
+            {invoiceItems.length > 0 && (
+              <DataTable
+                columnContentTypes={[
+                  "text",
+                  "numeric",
+                  "numeric",
+                  "numeric",
+                  "numeric",
+                  "text",
+                ]}
+                headings={[
+                  "Urun",
+                  "Adet",
+                  "Birim Fiyat",
+                  "KDV %",
+                  "Toplam",
+                  "",
+                ]}
+                rows={invoiceItems.map((item, idx) => [
+                  item.name,
+                  String(item.quantity),
+                  `${item.unitPrice.toFixed(2)} TL`,
+                  `%${item.vatRate}`,
+                  `${item.totalPrice.toFixed(2)} TL`,
+                  <Button
+                    key={idx}
+                    variant="plain"
+                    tone="critical"
+                    onClick={() => removeInvoiceItem(idx)}
+                  >
+                    Sil
+                  </Button>,
+                ])}
+                totals={[
+                  "",
+                  "",
+                  "",
+                  "",
+                  `${invoiceItems.reduce((s, i) => s + i.totalPrice, 0).toFixed(2)} TL`,
+                  "",
+                ]}
+                showTotalsInFooter
+              />
             )}
 
-            {/* Invoice List */}
-            <div className="bg-white rounded-xl border p-6">
-              <h2 className="text-lg font-semibold mb-4">Kesilen Faturalar</h2>
-              {invoiceList.length === 0 ? (
-                <p className="text-gray-500 text-sm">Henuz fatura kesilmemis.</p>
-              ) : (
-                <div className="space-y-2">
-                  {invoiceList.map((inv) => (
-                    <div key={inv.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                      <div className="flex-1">
-                        <div className="text-sm font-medium">#{inv.orderNumber}</div>
-                        <div className="text-xs text-gray-500">
-                          {inv.customerName} {inv.orderSource ? `(${inv.orderSource})` : ""}
-                        </div>
-                      </div>
-                      <div className="text-right mr-4">
-                        <div className="text-sm font-medium">{inv.totalAmount} {inv.currency}</div>
-                        <div className="text-xs text-gray-500">{new Date(inv.createdAt).toLocaleDateString("tr-TR")}</div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                          inv.status === "sent" ? "bg-green-100 text-green-700" :
-                          inv.status === "error" ? "bg-red-100 text-red-700" :
-                          inv.status === "cancelled" ? "bg-gray-100 text-gray-700" :
-                          "bg-yellow-100 text-yellow-700"
-                        }`}>
-                          {inv.status === "sent" ? "Gonderildi" :
-                           inv.status === "error" ? "Hata" :
-                           inv.status === "cancelled" ? "Iptal" : "Bekliyor"}
-                        </span>
-                        {inv.pdfUrl && (
-                          <a href={inv.pdfUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 text-xs">
-                            PDF
-                          </a>
-                        )}
-                      </div>
-                      {inv.errorMessage && (
-                        <div className="text-xs text-red-500 ml-2" title={inv.errorMessage}>
-                          {inv.errorMessage.substring(0, 30)}...
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
+            <FormLayout>
+              <FormLayout.Group>
+                <TextField
+                  label="Urun Adi"
+                  value={invoiceForm.itemName}
+                  onChange={(val) =>
+                    setInvoiceForm({ ...invoiceForm, itemName: val })
+                  }
+                  autoComplete="off"
+                />
+                <TextField
+                  label="Adet"
+                  type="number"
+                  value={invoiceForm.itemQuantity}
+                  onChange={(val) =>
+                    setInvoiceForm({ ...invoiceForm, itemQuantity: val })
+                  }
+                  autoComplete="off"
+                />
+                <TextField
+                  label="Birim Fiyat"
+                  type="number"
+                  value={invoiceForm.itemUnitPrice}
+                  onChange={(val) =>
+                    setInvoiceForm({ ...invoiceForm, itemUnitPrice: val })
+                  }
+                  autoComplete="off"
+                />
+                <TextField
+                  label="KDV %"
+                  type="number"
+                  value={invoiceForm.itemVatRate}
+                  onChange={(val) =>
+                    setInvoiceForm({ ...invoiceForm, itemVatRate: val })
+                  }
+                  autoComplete="off"
+                />
+              </FormLayout.Group>
+              <Button onClick={addInvoiceItem}>Kalem Ekle</Button>
+            </FormLayout>
+          </BlockStack>
+        </Modal.Section>
+      </Modal>
+
+      {/* Invoice List */}
+      <Layout.Section>
+        <Card>
+          <BlockStack gap="400">
+            <Text as="h2" variant="headingMd">
+              Kesilen Faturalar
+            </Text>
+            {invoiceList.length === 0 ? (
+              <Text as="p" variant="bodyMd" tone="subdued">
+                Henuz fatura kesilmemis.
+              </Text>
+            ) : (
+              <DataTable
+                columnContentTypes={[
+                  "text",
+                  "text",
+                  "numeric",
+                  "text",
+                  "text",
+                  "text",
+                ]}
+                headings={[
+                  "Siparis No",
+                  "Musteri",
+                  "Tutar",
+                  "Tarih",
+                  "Durum",
+                  "PDF",
+                ]}
+                rows={invoiceList.map((inv) => [
+                  `#${inv.orderNumber}`,
+                  `${inv.customerName || ""}${inv.orderSource ? ` (${inv.orderSource})` : ""}`,
+                  `${inv.totalAmount} ${inv.currency}`,
+                  new Date(inv.createdAt).toLocaleDateString("tr-TR"),
+                  invoiceStatusBadge(inv.status),
+                  inv.pdfUrl ? (
+                    <a
+                      key={inv.id}
+                      href={inv.pdfUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      PDF
+                    </a>
+                  ) : (
+                    ""
+                  ),
+                ])}
+              />
+            )}
+          </BlockStack>
+        </Card>
+      </Layout.Section>
+    </Layout>
+  );
+
+  // -----------------------------------------------------------------------
+  // Render
+  // -----------------------------------------------------------------------
+
+  const tabs = [
+    { id: "setup", content: "Kurulum" },
+    { id: "matching", content: "Urun Eslestirme" },
+    { id: "logs", content: "Sync Loglari" },
+    { id: "invoice", content: "E-Fatura" },
+  ];
+
+  const tabContent = [
+    renderSetupTab,
+    renderMatchingTab,
+    renderLogsTab,
+    renderInvoiceTab,
+  ];
+
+  return (
+    <Page
+      title="BayiPortal Entegrasyon"
+      subtitle={settings.shop.domain}
+      titleMetadata={
+        <Badge tone="info">
+          {`${settings.shop.plan === "free" ? "Ucretsiz" : settings.shop.plan} -- ${activeMatchCount}/${settings.shop.productLimit} urun`}
+        </Badge>
+      }
+    >
+      <Tabs tabs={tabs} selected={selectedTab} onSelect={setSelectedTab}>
+        <Box paddingBlockStart="400">{tabContent[selectedTab]()}</Box>
+      </Tabs>
+    </Page>
   );
 }

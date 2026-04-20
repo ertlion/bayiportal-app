@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { exchangeCodeForToken, verifyHmac, registerWebhooks, shopifyApi } from "@/lib/shopify";
-import { encodeSession } from "@/lib/session";
 import { db } from "@/lib/db";
 import { shops } from "@/lib/schema";
 import { eq } from "drizzle-orm";
@@ -8,14 +7,16 @@ import { eq } from "drizzle-orm";
 const APP_URL = process.env.APP_URL!;
 
 /**
- * GET /api/auth/callback?code=xxx&hmac=xxx&shop=xxx&state=xxx
- * Shopify OAuth callback — exchange code for token, create/update shop, set session.
+ * GET /api/auth/callback?code=xxx&hmac=xxx&shop=xxx&state=xxx&host=xxx
+ * Shopify OAuth callback — exchange code for token, create/update shop.
+ * Redirects to /dashboard with shop and host params (no cookie — frontend uses session tokens).
  */
 export async function GET(request: NextRequest) {
   const { searchParams } = request.nextUrl;
   const shop = searchParams.get("shop") || "";
   const code = searchParams.get("code") || "";
   const hmac = searchParams.get("hmac") || "";
+  const host = searchParams.get("host") || "";
 
   if (!shop || !code) {
     return NextResponse.json({ error: "Missing shop or code" }, { status: 400 });
@@ -82,16 +83,13 @@ export async function GET(request: NextRequest) {
     console.error("Webhook registration failed:", err);
   }
 
-  // Create session cookie and redirect to dashboard
-  const sessionValue = encodeSession(existingShop!.id, shop);
-  const response = NextResponse.redirect(new URL("/dashboard", APP_URL));
-  response.cookies.set("bp_session", sessionValue, {
-    httpOnly: true,
-    secure: true,
-    sameSite: "none", // Required for Shopify iframe
-    path: "/",
-    maxAge: 7 * 24 * 60 * 60,
-  });
+  // Redirect to dashboard with shop and host params
+  // Frontend will use App Bridge to get session tokens — no cookie needed
+  const redirectUrl = new URL("/dashboard", APP_URL);
+  redirectUrl.searchParams.set("shop", shop);
+  if (host) {
+    redirectUrl.searchParams.set("host", host);
+  }
 
-  return response;
+  return NextResponse.redirect(redirectUrl);
 }
