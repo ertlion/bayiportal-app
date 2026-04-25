@@ -1,6 +1,9 @@
 import type {
   MarketplaceAdapter,
   MarketplaceCredentials,
+  MarketplaceCategory,
+  PushProductInput,
+  PushProductResult,
   RemoteProduct,
   StockUpdateResult,
 } from "../types";
@@ -243,6 +246,139 @@ export class N11Adapter implements MarketplaceAdapter {
       return {
         success: false,
         error: `N11 stok guncelleme hatasi: ${err instanceof Error ? err.message : String(err)}`,
+      };
+    }
+  }
+
+  async pushProduct(
+    creds: MarketplaceCredentials,
+    product: PushProductInput
+  ): Promise<PushProductResult> {
+    try {
+      const imageXml = product.images
+        .map(
+          (url, i) =>
+            `<sch:image>
+              <sch:url>${escapeXml(url)}</sch:url>
+              <sch:order>${i + 1}</sch:order>
+            </sch:image>`
+        )
+        .join("\n");
+
+      const requestBody = soapEnvelope(
+        "",
+        `<sch:SaveProductRequest>
+          ${authBlock(creds)}
+          <sch:product>
+            <sch:productSellerCode>${escapeXml(product.warehouseSku)}</sch:productSellerCode>
+            <sch:title>${escapeXml(product.title)}</sch:title>
+            <sch:subtitle></sch:subtitle>
+            <sch:description>${escapeXml(product.description)}</sch:description>
+            <sch:category>
+              <sch:id>${escapeXml(product.categoryId)}</sch:id>
+            </sch:category>
+            <sch:price>${product.salePrice}</sch:price>
+            <sch:currencyType>1</sch:currencyType>
+            <sch:preparingDay>3</sch:preparingDay>
+            <sch:salesStartDate/>
+            <sch:productCondition>1</sch:productCondition>
+            <sch:images>
+              ${imageXml}
+            </sch:images>
+            <sch:stockItems>
+              <sch:stockItem>
+                <sch:sellerStockCode>${escapeXml(product.sku)}</sch:sellerStockCode>
+                <sch:quantity>${product.stockQuantity}</sch:quantity>
+                <sch:optionPrice>${product.salePrice}</sch:optionPrice>
+              </sch:stockItem>
+            </sch:stockItems>
+          </sch:product>
+        </sch:SaveProductRequest>`
+      );
+
+      const xml = await soapRequest(
+        `${BASE_URL}/ProductService/`,
+        requestBody
+      );
+
+      const status = extractTag(xml, "status");
+      if (status === "success") {
+        const productId = extractTag(xml, "productId");
+        return { success: true, externalProductId: productId || undefined };
+      }
+
+      const errorMessage = extractTag(xml, "errorMessage");
+      return {
+        success: false,
+        error: `N11 urun kaydetme hatasi: ${errorMessage || "Bilinmeyen hata"}`,
+      };
+    } catch (err) {
+      return {
+        success: false,
+        error: `N11 urun kaydetme hatasi: ${err instanceof Error ? err.message : String(err)}`,
+      };
+    }
+  }
+
+  async getCategories(
+    creds: MarketplaceCredentials,
+    parentId?: string
+  ): Promise<{
+    success: boolean;
+    categories: MarketplaceCategory[];
+    error?: string;
+  }> {
+    try {
+      let requestBody: string;
+
+      if (parentId) {
+        requestBody = soapEnvelope(
+          "",
+          `<sch:GetSubCategoriesRequest>
+            ${authBlock(creds)}
+            <sch:categoryId>${escapeXml(parentId)}</sch:categoryId>
+          </sch:GetSubCategoriesRequest>`
+        );
+      } else {
+        requestBody = soapEnvelope(
+          "",
+          `<sch:GetTopLevelCategoriesRequest>
+            ${authBlock(creds)}
+          </sch:GetTopLevelCategoriesRequest>`
+        );
+      }
+
+      const xml = await soapRequest(
+        `${BASE_URL}/CategoryService/`,
+        requestBody
+      );
+
+      const errorMessage = extractTag(xml, "errorMessage");
+      if (errorMessage && errorMessage !== "null") {
+        return {
+          success: false,
+          categories: [],
+          error: `N11 kategori hatasi: ${errorMessage}`,
+        };
+      }
+
+      const categoryBlocks = extractAllTags(xml, "category");
+      const categories: MarketplaceCategory[] = categoryBlocks.map(
+        (block) => ({
+          id: extractTag(block, "id"),
+          name: extractTag(block, "name"),
+          hasSubCategories:
+            extractAllTags(block, "category").length > 0 ||
+            extractTag(block, "subCategoryCount") !== "0",
+        })
+      );
+
+      return { success: true, categories };
+    } catch (err) {
+      return {
+        success: false,
+        categories: [],
+        error: `N11 kategori hatasi: ${err instanceof Error ? err.message : String(err)}`,
       };
     }
   }
