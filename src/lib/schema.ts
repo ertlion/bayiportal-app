@@ -119,6 +119,7 @@ export const shopsRelations = relations(shops, ({ many, one }) => ({
   shopifyProducts: many(shopifyProducts),
   marketplaceProducts: many(marketplaceProducts),
   syncLogs: many(syncLogs),
+  tenantSettings: many(tenantSettings),
   invoiceSetting: one(invoiceSettings),
   invoices: many(invoices),
 }));
@@ -142,6 +143,17 @@ export const marketplaceProductsRelations = relations(marketplaceProducts, ({ on
 export const syncLogsRelations = relations(syncLogs, ({ one }) => ({
   shop: one(shops, { fields: [syncLogs.shopId], references: [shops.id] }),
 }));
+
+// ==================== TENANT SETTINGS (key-value per shop) ====================
+export const tenantSettings = pgTable("tenant_settings", {
+  id: serial("id").primaryKey(),
+  shopId: integer("shop_id").notNull().references(() => shops.id, { onDelete: "cascade" }),
+  key: text("key").notNull(),
+  value: text("value").notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (t) => [
+  uniqueIndex("ts_shop_key_idx").on(t.shopId, t.key),
+]);
 
 // ==================== INVOICE SETTINGS ====================
 export const invoiceSettings = pgTable("invoice_settings", {
@@ -179,6 +191,10 @@ export const invoices = pgTable("invoices", {
 ]);
 
 // ==================== INVOICE RELATIONS ====================
+export const tenantSettingsRelations = relations(tenantSettings, ({ one }) => ({
+  shop: one(shops, { fields: [tenantSettings.shopId], references: [shops.id] }),
+}));
+
 export const invoiceSettingsRelations = relations(invoiceSettings, ({ one }) => ({
   shop: one(shops, { fields: [invoiceSettings.shopId], references: [shops.id] }),
 }));

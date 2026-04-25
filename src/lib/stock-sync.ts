@@ -11,6 +11,7 @@ import { decrypt } from "./crypto";
 import { shopifyApi } from "./shopify";
 import type { MarketplaceAdapter, MarketplaceCredentials as MpCreds } from "./marketplace/types";
 import { TrendyolAdapter } from "./marketplace/adapters/trendyol";
+import { checkAndNotifyStockAlerts } from "./stock-alerts";
 
 // ---------- Adapter Registry ----------
 
@@ -353,6 +354,13 @@ export async function syncShopifyToMarketplace(
     stats.errors.length > 0 ? stats.errors.join("; ") : undefined
   );
 
+  // Check stock alerts for changed variants
+  try {
+    await checkAndNotifyStockAlerts(shopId, [shopifyVariantId]);
+  } catch (err) {
+    console.error("[stock-sync] Stock alert check failed:", err);
+  }
+
   return stats;
 }
 
@@ -564,6 +572,19 @@ export async function syncMarketplaceToShopify(shopId: number): Promise<SyncStat
     { matchingsCount: matchings.length, stats },
     stats.errors.length > 0 ? stats.errors.join("; ") : undefined
   );
+
+  // Collect all synced variant IDs for stock alert checks
+  const changedVariantIds = matchings
+    .filter((m) => m.shopifyVariantId)
+    .map((m) => m.shopifyVariantId);
+
+  if (changedVariantIds.length > 0) {
+    try {
+      await checkAndNotifyStockAlerts(shopId, changedVariantIds);
+    } catch (err) {
+      console.error("[stock-sync] Stock alert check failed:", err);
+    }
+  }
 
   return stats;
 }

@@ -25,6 +25,7 @@ import {
   Divider,
 } from "@shopify/polaris";
 import { useAuthenticatedFetch } from "../providers";
+import AnalyticsDashboard from "./analytics-dashboard";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -223,7 +224,7 @@ const INVOICE_PROVIDERS: {
   },
 ];
 
-const TAB_IDS = ["setup", "matching", "logs", "invoice"] as const;
+const TAB_IDS = ["analytics", "setup", "matching", "logs", "invoice"] as const;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -1434,13 +1435,17 @@ export default function Dashboard() {
   // -----------------------------------------------------------------------
 
   const tabs = [
+    { id: "analytics", content: "Analitik" },
     { id: "setup", content: "Kurulum" },
     { id: "matching", content: "Urun Eslestirme" },
     { id: "logs", content: "Sync Loglari" },
     { id: "invoice", content: "E-Fatura" },
   ];
 
+  const renderAnalyticsTab = () => <AnalyticsDashboard />;
+
   const tabContent = [
+    renderAnalyticsTab,
     renderSetupTab,
     renderMatchingTab,
     renderLogsTab,
