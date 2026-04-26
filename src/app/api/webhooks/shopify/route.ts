@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyWebhookHmac } from "@/lib/shopify";
 import { db } from "@/lib/db";
-import { shops, productMatchings, syncLogs } from "@/lib/schema";
-import { eq, and } from "drizzle-orm";
+import { shops } from "@/lib/schema";
+import { eq } from "drizzle-orm";
+import { queueFailedWebhook } from "@/lib/webhook-retry";
+import { processWebhookRetry } from "@/lib/webhook-processor";
 
 export async function POST(request: NextRequest) {
   const topic = request.headers.get("x-shopify-topic") || "";
@@ -16,8 +18,6 @@ export async function POST(request: NextRequest) {
     console.warn(`[webhook] Invalid HMAC from ${shopDomain}`);
   }
 
-  const data = JSON.parse(body);
-
   // Find shop
   const shop = await db.query.shops.findFirst({
     where: eq(shops.shopDomain, shopDomain),
@@ -28,46 +28,18 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    switch (topic) {
-      case "inventory_levels/update":
-        await handleInventoryUpdate(shop.id, data);
-        break;
-
-      case "products/update":
-        // Could refresh product cache, but inventory_levels/update is more precise
-        break;
-
-      case "app/uninstalled":
-        await db.update(shops).set({
-          isActive: false,
-          uninstalledAt: new Date(),
-          updatedAt: new Date(),
-        }).where(eq(shops.id, shop.id));
-        break;
-    }
+    await processWebhookRetry(shop.id, topic, body);
   } catch (err) {
-    console.error(`[webhook] ${topic} error for ${shopDomain}:`, err);
+    const errorMsg = err instanceof Error ? err.message : String(err);
+    console.error(`[webhook] ${topic} error for ${shopDomain}:`, errorMsg);
+
+    // Queue for retry instead of silently losing the webhook
+    try {
+      await queueFailedWebhook(shop.id, topic, body, errorMsg);
+    } catch (queueErr) {
+      console.error("[webhook] Failed to queue webhook for retry:", queueErr);
+    }
   }
 
   return NextResponse.json({ ok: true });
-}
-
-async function handleInventoryUpdate(shopId: number, data: { inventory_item_id: number; available: number; location_id: number }) {
-  const inventoryItemId = String(data.inventory_item_id);
-  const newQuantity = data.available;
-
-  // Find matching by inventoryItemId
-  const matching = await db.query.productMatchings.findFirst({
-    where: and(
-      eq(productMatchings.shopId, shopId),
-      eq(productMatchings.shopifyInventoryItemId, inventoryItemId),
-      eq(productMatchings.isActive, true),
-    ),
-  });
-
-  if (!matching) return; // Not a matched product
-
-  // Lazy import to avoid circular
-  const { syncShopifyToMarketplace } = await import("@/lib/stock-sync");
-  await syncShopifyToMarketplace(shopId, matching.shopifyVariantId, newQuantity);
 }
