@@ -138,6 +138,101 @@ export async function checkAndNotifyStockAlerts(
 }
 
 /**
+ * Send an immediate zero-stock ("tukendi") notification for a specific variant.
+ * This is called directly from stock-sync when a variant's stock reaches 0,
+ * providing faster alerts than the threshold-based system.
+ *
+ * Debounce: won't send the same alert more than once per hour.
+ */
+export async function notifyZeroStock(
+  tenantId: number,
+  variantId: string
+): Promise<void> {
+  const oneHourAgo = new Date(Date.now() - DEBOUNCE_MS);
+
+  // Debounce check
+  const recentAlert = await db
+    .select({ id: syncLogs.id })
+    .from(syncLogs)
+    .where(
+      and(
+        eq(syncLogs.shopId, tenantId),
+        eq(syncLogs.type, "stock_alert"),
+        eq(syncLogs.summary, `stock_alert_zero:${variantId}`),
+        gte(syncLogs.createdAt, oneHourAgo)
+      )
+    )
+    .limit(1);
+
+  if (recentAlert.length > 0) return;
+
+  // Get shop info
+  const [shop] = await db
+    .select({ shopDomain: shops.shopDomain, email: shops.email })
+    .from(shops)
+    .where(eq(shops.id, tenantId))
+    .limit(1);
+
+  if (!shop) return;
+
+  // Resolve variant info
+  const variants = await resolveVariantStockInfo(tenantId, [variantId]);
+  const variant = variants[0];
+  if (!variant) return;
+
+  // Send Telegram notification with [TUKENDI] prefix
+  try {
+    await notifyLowStock({
+      shopDomain: shop.shopDomain,
+      productTitle: `[TUKENDI] ${variant.productTitle}`,
+      variantTitle: variant.variantTitle,
+      marketplace: variant.marketplace,
+      currentStock: 0,
+      threshold: 0,
+    });
+  } catch (err) {
+    console.error("[stock-alerts] Zero stock Telegram notification failed:", err);
+  }
+
+  // Send email notification
+  if (shop.email) {
+    try {
+      await sendStockChangeEmail({
+        to: shop.email,
+        shopDomain: shop.shopDomain,
+        productTitle: `[TUKENDI] ${variant.productTitle}`,
+        variantTitle: variant.variantTitle,
+        marketplace: variant.marketplace,
+        currentStock: 0,
+        threshold: 0,
+      });
+    } catch (err) {
+      console.error("[stock-alerts] Zero stock email notification failed:", err);
+    }
+  }
+
+  // Log for debouncing
+  try {
+    await db.insert(syncLogs).values({
+      shopId: tenantId,
+      type: "stock_alert",
+      marketplace: variant.marketplace,
+      summary: `stock_alert_zero:${variantId}`,
+      details: {
+        variantId,
+        productTitle: variant.productTitle,
+        variantTitle: variant.variantTitle,
+        stockQuantity: 0,
+        isZeroAlert: true,
+      },
+      status: "success",
+    });
+  } catch {
+    // Log failure should not crash the flow
+  }
+}
+
+/**
  * Resolve variant IDs to full stock info from Shopify product cache + matchings.
  */
 async function resolveVariantStockInfo(

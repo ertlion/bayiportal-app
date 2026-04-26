@@ -11,7 +11,7 @@ import { decrypt } from "./crypto";
 import { shopifyApi } from "./shopify";
 import type { MarketplaceAdapter, MarketplaceCredentials as MpCreds } from "./marketplace/types";
 import { TrendyolAdapter } from "./marketplace/adapters/trendyol";
-import { checkAndNotifyStockAlerts } from "./stock-alerts";
+import { checkAndNotifyStockAlerts, notifyZeroStock } from "./stock-alerts";
 
 // ---------- Adapter Registry ----------
 
@@ -337,6 +337,15 @@ export async function syncShopifyToMarketplace(
     }
   }
 
+  // Zero-stock alert: if Shopify stock dropped to 0, send immediate "tukendi" notification
+  if (newQuantity <= 0) {
+    try {
+      await notifyZeroStock(shopId, shopifyVariantId);
+    } catch (err) {
+      console.error("[stock-sync] Zero stock notification failed:", err);
+    }
+  }
+
   // Write sync log
   const logStatus = stats.errors.length === 0
     ? "success"
@@ -522,6 +531,15 @@ export async function syncMarketplaceToShopify(shopId: number): Promise<SyncStat
 
             // If both needed update, synced was incremented twice — that's correct (two operations)
             await updateMatchingStatus(matching.id, "success");
+
+            // Zero-stock alert: if target quantity dropped to 0, send immediate "tukendi" notification
+            if (targetQuantity <= 0) {
+              try {
+                await notifyZeroStock(shopId, matching.shopifyVariantId);
+              } catch (err) {
+                console.error("[stock-sync] Zero stock notification failed:", err);
+              }
+            }
           } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
             stats.errors.push(
