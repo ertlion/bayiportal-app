@@ -25,6 +25,7 @@ const STEPS = [
   "Magaza Bilgileri",
   "Shopify Baglantisi",
   "Pazaryeri Sec",
+  "Stok Kaynagi",
   "Pazaryeri Bagla",
   "Urun Sync",
   "Otomatik Eslestir",
@@ -279,7 +280,95 @@ function StepSelectMarketplace({
   );
 }
 
-/* ---------- Step 4: Pazaryeri Bagla ---------- */
+/* ---------- Step 4: Stok Kaynagi ---------- */
+
+function StepStockSource({
+  onNext,
+  onBack,
+  selectedMarketplace,
+}: StepProps & { selectedMarketplace: MarketplaceName | null }) {
+  const [strategy, setStrategy] = useState("lowest_wins");
+  const [saving, setSaving] = useState(false);
+
+  const strategies = [
+    {
+      value: "lowest_wins",
+      label: "En Dusuk Stok Kazanir (Onerilen)",
+      desc: "Herhangi bir platformda satis olursa stok otomatik duser. Fazla satisi onler.",
+      icon: "🛡️",
+    },
+    {
+      value: "master_source",
+      label: `${selectedMarketplace ? MARKETPLACES.find((m) => m.id === selectedMarketplace)?.label || selectedMarketplace : "Pazaryeri"} Master Kaynak`,
+      desc: "Sectiginiz pazaryerindeki stok degisiklikleri diger platformlara yansir.",
+      icon: "👑",
+    },
+    {
+      value: "always_sync",
+      label: "Her Degisikligi Senkronize Et",
+      desc: "Herhangi bir platformdaki stok degisikligi aninda digerlerine yansir.",
+      icon: "🔄",
+    },
+  ];
+
+  async function save() {
+    setSaving(true);
+    try {
+      const settings: Record<string, string> = { stock_sync_strategy: strategy };
+      if (strategy === "master_source" && selectedMarketplace) {
+        settings.stock_master_source = selectedMarketplace;
+      }
+      await fetch("/api/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(settings),
+      });
+      onNext();
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="max-w-lg mx-auto">
+      <h2 className="text-xl font-bold text-gray-900 mb-2">Stok Kaynaginiz Neresi?</h2>
+      <p className="text-sm text-gray-500 mb-6">
+        Birden fazla platformda satis yaptiginizda stoklar nasil guncellenmeli?
+      </p>
+
+      <div className="space-y-3 mb-6">
+        {strategies.map((s) => (
+          <label
+            key={s.value}
+            className={`flex items-start gap-3 p-4 rounded-xl border-2 cursor-pointer transition ${strategy === s.value ? "border-blue-500 bg-blue-50" : "border-gray-200 hover:border-gray-300"}`}
+          >
+            <input
+              type="radio"
+              name="strategy"
+              value={s.value}
+              checked={strategy === s.value}
+              onChange={() => setStrategy(s.value)}
+              className="mt-1"
+            />
+            <div>
+              <div className="text-sm font-semibold text-gray-800">{s.icon} {s.label}</div>
+              <div className="text-xs text-gray-500 mt-0.5">{s.desc}</div>
+            </div>
+          </label>
+        ))}
+      </div>
+
+      <div className="flex justify-between">
+        <button onClick={onBack} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800">Geri</button>
+        <button onClick={save} disabled={saving} className="px-6 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50">
+          {saving ? "Kaydediliyor..." : "Devam"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ---------- Step 5: Pazaryeri Bagla ---------- */
 
 function StepConnectMarketplace({
   onNext,
@@ -583,16 +672,19 @@ export default function OnboardingPage() {
               onSelect={setSelectedMarketplace}
             />
           )}
-          {step === 3 && selectedMarketplace && (
+          {step === 3 && (
+            <StepStockSource onNext={next} onBack={back} selectedMarketplace={selectedMarketplace} />
+          )}
+          {step === 4 && selectedMarketplace && (
             <StepConnectMarketplace
               onNext={next}
               onBack={back}
               marketplace={selectedMarketplace}
             />
           )}
-          {step === 4 && <StepProductSync onNext={next} onBack={back} />}
-          {step === 5 && <StepAutoMatch onNext={next} onBack={back} />}
-          {step === 6 && <StepComplete />}
+          {step === 5 && <StepProductSync onNext={next} onBack={back} />}
+          {step === 6 && <StepAutoMatch onNext={next} onBack={back} />}
+          {step === 7 && <StepComplete />}
         </div>
       </div>
     </div>
